@@ -62,14 +62,15 @@ def test_create_agent_anthropic(mock_model, mock_memory):
     mock_memory.get.return_value = {"provider": "anthropic", "model": "claude-2"}
 
     with patch("ra_aid.agent_utils.create_react_agent") as mock_react:
-        mock_react.return_value = "react_agent"  
+        mock_react.return_value = "react_agent"
         agent = create_agent(mock_model, [])
 
         assert agent == "react_agent"
         mock_react.assert_called_once_with(
-            mock_model, [],
+            mock_model,
+            [],
             checkpointer=None,
-            state_modifier=mock_react.call_args[1]["state_modifier"]
+            state_modifier=mock_react.call_args[1]["state_modifier"],
         )
 
 
@@ -96,7 +97,9 @@ def test_create_agent_no_token_limit(mock_model, mock_memory):
         agent = create_agent(mock_model, [])
 
         assert agent == "ciayn_agent"
-        mock_ciayn.assert_called_once_with(mock_model, [], max_tokens=DEFAULT_TOKEN_LIMIT)
+        mock_ciayn.assert_called_once_with(
+            mock_model, [], max_tokens=DEFAULT_TOKEN_LIMIT
+        )
 
 
 def test_create_agent_missing_config(mock_model, mock_memory):
@@ -109,8 +112,7 @@ def test_create_agent_missing_config(mock_model, mock_memory):
 
         assert agent == "ciayn_agent"
         mock_ciayn.assert_called_once_with(
-            mock_model, [],
-            max_tokens=DEFAULT_TOKEN_LIMIT
+            mock_model, [], max_tokens=DEFAULT_TOKEN_LIMIT
         )
 
 
@@ -126,8 +128,6 @@ def mock_messages():
         HumanMessage(content="Human message 2"),
         AIMessage(content="AI response 2"),
     ]
-
-
 
 
 def test_limit_tokens_basic(mock_messages):
@@ -183,9 +183,10 @@ def test_create_agent_error_handling(mock_model, mock_memory):
 
         assert agent == "react_agent"
         mock_react.assert_called_once_with(
-            mock_model, [],
+            mock_model,
+            [],
             checkpointer=None,
-            state_modifier=mock_react.call_args[1]["state_modifier"]
+            state_modifier=mock_react.call_args[1]["state_modifier"],
         )
 
 
