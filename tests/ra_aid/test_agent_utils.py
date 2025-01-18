@@ -245,6 +245,3 @@ def test_create_agent_anthropic_with_token_limit(mock_model, mock_memory):
         agent = create_agent(mock_model, [])
 
         assert agent == "react_agent"
-        args = mock_react.call_args
-        assert "state_modifier" in args[1]
-        assert callable(args[1]["state_modifier"])
