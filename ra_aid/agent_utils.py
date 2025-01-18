@@ -225,7 +225,6 @@ def create_agent(
     config['limit_tokens'] = False.
     """
     try:
-        # Get model info and token limit
         config = _global_memory.get("config") or {}
         provider = config.get("provider")
         model_name = config.get("model")
@@ -234,7 +233,6 @@ def create_agent(
         # Use REACT agent for Anthropic Claude models, otherwise use CIAYN
         if provider == "anthropic" and model_name and "claude" in model_name:
             logger.debug("Using create_react_agent to instantiate agent.")
-            token_limit = get_model_token_limit()
             agent_kwargs = build_agent_kwargs(checkpointer, config, token_limit)
             return create_react_agent(model, tools, **agent_kwargs)
         else:
