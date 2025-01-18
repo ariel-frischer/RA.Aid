@@ -80,29 +80,52 @@ def limit_tokens(
 ) -> Sequence[BaseMessage] | Dict[str, Any]:
     """Limit total tokens in state messages while preserving the system message.
 
-    Takes a LangGraph state list of messages and trims older messages to stay under
-    max_tokens, ensuring the system (initial) message is always preserved.
+    Takes either a LangGraph state list of messages or a dict with messages key and trims 
+    older messages to stay under max_tokens, ensuring the system (initial) message is preserved.
 
     Args:
-        state: List of messages (BaseMessage).
+        state: List of messages (BaseMessage) or dict with 'messages' key.
         max_tokens: Maximum total tokens allowed.
 
     Returns:
-        List[BaseMessage]: Messages trimmed to fit under the token limit.
+        Same type as input (List[BaseMessage] or dict) with messages trimmed to fit under token limit.
     """
     if not state:
         return state
 
-    print(f"state={state}")
-
     estimate_tokens = CiaynAgent._estimate_tokens
 
+    # Handle dict case
+    if isinstance(state, dict):
+        messages = state.get('messages', [])
+        if not messages:
+            return state
+            
+        initial_message = messages[0]
+        initial_message_tokens = estimate_tokens(initial_message) if initial_message else 0
+        remaining_msgs = messages[1:] if initial_message else messages
+
+        token_counts = [estimate_tokens(msg) for msg in remaining_msgs]
+        total_tokens = initial_message_tokens + sum(token_counts)
+
+        # Trim from the front until we fit under max_tokens
+        start_idx = 0
+        while total_tokens > max_tokens and start_idx < len(token_counts):
+            total_tokens -= token_counts[start_idx]
+            start_idx += 1
+
+        # Keep initial message + whatever remains after trimming
+        filtered_messages = ([initial_message] if initial_message else []) + remaining_msgs[start_idx:]
+        
+        # Return new dict with filtered messages
+        return {**state, 'messages': filtered_messages}
+
+    # Handle sequence case
     initial_message = state[0]
     initial_message_tokens = estimate_tokens(initial_message) if initial_message else 0
     remaining_msgs = state[1:] if initial_message else state
 
     token_counts = [estimate_tokens(msg) for msg in remaining_msgs]
-
     total_tokens = initial_message_tokens + sum(token_counts)
 
     # Trim from the front until we fit under max_tokens
