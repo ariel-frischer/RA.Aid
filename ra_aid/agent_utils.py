@@ -176,7 +176,6 @@ def build_agent_kwargs(
     checkpointer: Optional[Any] = None,
     config: Optional[Dict[str, Any]] = None,
     token_limit: Optional[int] = None,
-    is_react_agent: bool = False
 ) -> Dict[str, Any]:
     """Build kwargs dictionary for agent creation.
     
@@ -184,7 +183,6 @@ def build_agent_kwargs(
         checkpointer: Optional memory checkpointer
         config: Optional configuration dictionary
         token_limit: Optional token limit for the model
-        is_react_agent: Whether this is for a react agent (vs CiaynAgent)
         
     Returns:
         Dictionary of kwargs for agent creation
@@ -196,14 +194,7 @@ def build_agent_kwargs(
 
     if config and config.get("limit_tokens", True):
         state_modifier = lambda state: limit_tokens(state, max_tokens=token_limit)
-        if is_react_agent:
-            agent_kwargs["state_modifier"] = state_modifier
-        else:
-            agent_kwargs["max_tokens"] = token_limit
-            agent_kwargs["state_modifier"] = state_modifier
-    else:
-        if not is_react_agent:
-            agent_kwargs["max_tokens"] = token_limit
+        agent_kwargs["state_modifier"] = state_modifier
 
     return agent_kwargs
 
@@ -243,7 +234,7 @@ def create_agent(
         # Use REACT agent for Anthropic Claude models, otherwise use CIAYN
         if provider == "anthropic" and model_name and "claude" in model_name:
             logger.debug("Using create_react_agent to instantiate agent.")
-            agent_kwargs = build_agent_kwargs(checkpointer, config, token_limit, is_react_agent=True)
+            agent_kwargs = build_agent_kwargs(checkpointer, config, token_limit)
             return create_react_agent(model, tools, **agent_kwargs)
         else:
             logger.debug("Using CiaynAgent agent instance")
