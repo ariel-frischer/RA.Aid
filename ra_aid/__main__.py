@@ -113,6 +113,11 @@ Examples:
         help='LLM temperature (0.0-2.0). Controls randomness in responses',
         default=None
     )
+    parser.add_argument(
+        '--aider-config',
+        type=str,
+        help='Specify the aider config file path'
+    )
 
     if args is None:
         args = sys.argv[1:]
@@ -268,7 +273,8 @@ def main():
             "recursion_limit": 100,
             "research_only": args.research_only,
             "cowboy_mode": args.cowboy_mode,
-            "web_research_enabled": web_research_enabled
+            "web_research_enabled": web_research_enabled,
+            "aider_config": args.aider_config
         }
 
         # Store config in global memory for access by is_informational_query
