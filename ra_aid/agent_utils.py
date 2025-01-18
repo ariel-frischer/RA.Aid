@@ -7,6 +7,8 @@ from typing import Optional, Any, List, Dict, Sequence
 from langchain_core.messages import BaseMessage, SystemMessage
 
 import signal
+
+from langgraph.graph.state import StateNodeSpec
 from ra_aid.models_tokens import DEFAULT_TOKEN_LIMIT, models_tokens
 from ra_aid.agents.ciayn_agent import CiaynAgent
 import threading
@@ -74,8 +76,8 @@ def output_markdown_message(message: str) -> str:
 
 
 def limit_tokens(
-    state: Sequence[BaseMessage], max_tokens: int = DEFAULT_TOKEN_LIMIT
-) -> Sequence[BaseMessage]:
+    state: Sequence[BaseMessage] | Dict[str, Any], max_tokens: int = DEFAULT_TOKEN_LIMIT
+) -> Sequence[BaseMessage] | Dict[str, Any]:
     """Limit total tokens in state messages while preserving the system message.
 
     Takes a LangGraph state list of messages and trims older messages to stay under
@@ -90,6 +92,8 @@ def limit_tokens(
     """
     if not state:
         return state
+
+    print(f"state={state}")
 
     estimate_tokens = CiaynAgent._estimate_tokens
 
