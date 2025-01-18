@@ -66,7 +66,8 @@ def test_create_agent_anthropic(mock_model, mock_memory):
         agent = create_agent(mock_model, [])
 
         assert agent == "react_agent"
-        mock_react.assert_called_once_with(mock_model, [])
+        # Expect state_modifier by default since limit_tokens defaults to True
+        mock_react.assert_called_once_with(mock_model, [], state_modifier=mock_react.call_args[1]['state_modifier'])
 
 
 def test_create_agent_openai(mock_model, mock_memory):
@@ -265,4 +266,5 @@ def test_create_agent_anthropic_token_limiting_disabled(mock_model, mock_memory)
 
         assert agent == "react_agent"
         args = mock_react.call_args
-        assert "state_modifier" not in args[1]
+        # Check that state_modifier is not in the kwargs at all
+        assert "state_modifier" not in mock_react.call_args.kwargs
