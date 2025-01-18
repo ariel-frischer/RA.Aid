@@ -75,6 +75,38 @@ def output_markdown_message(message: str) -> str:
     return "Message output."
 
 
+def _trim_messages(messages: Sequence[BaseMessage], max_tokens: int) -> List[BaseMessage]:
+    """Helper function to trim messages to fit under token limit while preserving system message.
+    
+    Args:
+        messages: Sequence of messages to trim
+        max_tokens: Maximum total tokens allowed
+        
+    Returns:
+        List of messages trimmed to fit under token limit
+    """
+    if not messages:
+        return []
+        
+    estimate_tokens = CiaynAgent._estimate_tokens
+    
+    initial_message = messages[0]
+    initial_message_tokens = estimate_tokens(initial_message) if initial_message else 0
+    remaining_msgs = messages[1:] if initial_message else messages
+
+    token_counts = [estimate_tokens(msg) for msg in remaining_msgs]
+    total_tokens = initial_message_tokens + sum(token_counts)
+
+    # Trim from the front until we fit under max_tokens
+    start_idx = 0
+    while total_tokens > max_tokens and start_idx < len(token_counts):
+        total_tokens -= token_counts[start_idx]
+        start_idx += 1
+
+    # Keep initial message + whatever remains after trimming
+    return ([initial_message] if initial_message else []) + remaining_msgs[start_idx:]
+
+
 def limit_tokens(
     state: Sequence[BaseMessage] | Dict[str, Any], max_tokens: int = DEFAULT_TOKEN_LIMIT
 ) -> Sequence[BaseMessage] | Dict[str, Any]:
@@ -93,51 +125,17 @@ def limit_tokens(
     if not state:
         return state
 
-    estimate_tokens = CiaynAgent._estimate_tokens
-
     # Handle dict case
     if isinstance(state, dict):
         messages = state.get('messages', [])
         if not messages:
             return state
             
-        initial_message = messages[0]
-        initial_message_tokens = estimate_tokens(initial_message) if initial_message else 0
-        remaining_msgs = messages[1:] if initial_message else messages
-
-        token_counts = [estimate_tokens(msg) for msg in remaining_msgs]
-        total_tokens = initial_message_tokens + sum(token_counts)
-
-        # Trim from the front until we fit under max_tokens
-        start_idx = 0
-        while total_tokens > max_tokens and start_idx < len(token_counts):
-            total_tokens -= token_counts[start_idx]
-            start_idx += 1
-
-        # Keep initial message + whatever remains after trimming
-        filtered_messages = ([initial_message] if initial_message else []) + remaining_msgs[start_idx:]
-        
-        # Return new dict with filtered messages
+        filtered_messages = _trim_messages(messages, max_tokens)
         return {**state, 'messages': filtered_messages}
 
     # Handle sequence case
-    initial_message = state[0]
-    initial_message_tokens = estimate_tokens(initial_message) if initial_message else 0
-    remaining_msgs = state[1:] if initial_message else state
-
-    token_counts = [estimate_tokens(msg) for msg in remaining_msgs]
-    total_tokens = initial_message_tokens + sum(token_counts)
-
-    # Trim from the front until we fit under max_tokens
-    start_idx = 0
-    while total_tokens > max_tokens and start_idx < len(token_counts):
-        total_tokens -= token_counts[start_idx]
-        start_idx += 1
-
-    # Keep initial message + whatever remains after trimming
-    filtered_messages = ([initial_message] if initial_message else []) + remaining_msgs[start_idx:]
-
-    return filtered_messages
+    return _trim_messages(state, max_tokens)
 
 
 def get_model_token_limit() -> Optional[int]:
