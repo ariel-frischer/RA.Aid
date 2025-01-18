@@ -231,8 +231,8 @@ def test_create_agent_with_checkpointer(mock_model, mock_memory):
         )
 
 
-def test_create_agent_anthropic_with_token_limit(mock_model, mock_memory):
-    """Test create_agent sets up token limiting for Claude models."""
+def test_create_agent_anthropic_token_limiting_enabled(mock_model, mock_memory):
+    """Test create_agent sets up token limiting for Claude models when enabled."""
     mock_memory.get.return_value = {"provider": "anthropic", "model": "claude-2"}
 
     with (
@@ -242,6 +242,27 @@ def test_create_agent_anthropic_with_token_limit(mock_model, mock_memory):
         mock_react.return_value = "react_agent"
         mock_limit.return_value = 100000
 
-        agent = create_agent(mock_model, [])
+        agent = create_agent(mock_model, [], config={"limit_tokens": True})
 
         assert agent == "react_agent"
+        args = mock_react.call_args
+        assert "state_modifier" in args[1]
+        assert callable(args[1]["state_modifier"])
+
+
+def test_create_agent_anthropic_token_limiting_disabled(mock_model, mock_memory):
+    """Test create_agent doesn't set up token limiting for Claude models when disabled."""
+    mock_memory.get.return_value = {"provider": "anthropic", "model": "claude-2"}
+
+    with (
+        patch("ra_aid.agent_utils.create_react_agent") as mock_react,
+        patch("ra_aid.agent_utils.get_model_token_limit") as mock_limit,
+    ):
+        mock_react.return_value = "react_agent"
+        mock_limit.return_value = 100000
+
+        agent = create_agent(mock_model, [], config={"limit_tokens": False})
+
+        assert agent == "react_agent"
+        args = mock_react.call_args
+        assert "state_modifier" not in args[1]
