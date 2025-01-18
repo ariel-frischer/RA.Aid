@@ -113,6 +113,12 @@ Examples:
         help='LLM temperature (0.0-2.0). Controls randomness in responses',
         default=None
     )
+    parser.add_argument(
+        '--limit-tokens',
+        action='store_true',
+        default=True,
+        help='Whether to apply token limiting to agent state'
+    )
 
     if args is None:
         args = sys.argv[1:]
@@ -230,7 +236,8 @@ def main():
                 "cowboy_mode": args.cowboy_mode,
                 "hil": True,  # Always true in chat mode
                 "web_research_enabled": web_research_enabled,
-                "initial_request": initial_request
+                "initial_request": initial_request,
+                "limit_tokens": args.limit_tokens
             }
 
             # Store config in global memory
@@ -268,7 +275,8 @@ def main():
             "recursion_limit": 100,
             "research_only": args.research_only,
             "cowboy_mode": args.cowboy_mode,
-            "web_research_enabled": web_research_enabled
+            "web_research_enabled": web_research_enabled,
+            "limit_tokens": args.limit_tokens
         }
 
         # Store config in global memory for access by is_informational_query
