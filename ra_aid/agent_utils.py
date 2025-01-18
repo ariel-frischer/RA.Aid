@@ -75,21 +75,23 @@ def output_markdown_message(message: str) -> str:
     return "Message output."
 
 
-def _trim_messages(messages: Sequence[BaseMessage], max_tokens: int) -> List[BaseMessage]:
+def trim_messages(
+    messages: Sequence[BaseMessage], max_tokens: int
+) -> List[BaseMessage]:
     """Helper function to trim messages to fit under token limit while preserving system message.
-    
+
     Args:
         messages: Sequence of messages to trim
         max_tokens: Maximum total tokens allowed
-        
+
     Returns:
         List of messages trimmed to fit under token limit
     """
     if not messages:
         return []
-        
+
     estimate_tokens = CiaynAgent._estimate_tokens
-    
+
     initial_message = messages[0]
     initial_message_tokens = estimate_tokens(initial_message) if initial_message else 0
     remaining_msgs = messages[1:] if initial_message else messages
@@ -112,7 +114,7 @@ def limit_tokens(
 ) -> Sequence[BaseMessage] | Dict[str, Any]:
     """Limit total tokens in state messages while preserving the system message.
 
-    Takes either a LangGraph state list of messages or a dict with messages key and trims 
+    Takes either a LangGraph state list of messages or a dict with messages key and trims
     older messages to stay under max_tokens, ensuring the system (initial) message is preserved.
 
     Args:
@@ -125,17 +127,18 @@ def limit_tokens(
     if not state:
         return state
 
-    # Handle dict case
     if isinstance(state, dict):
-        messages = state.get('messages', [])
+        messages = state.get("messages", [])
         if not messages:
             return state
-            
-        filtered_messages = _trim_messages(messages, max_tokens)
-        return {**state, 'messages': filtered_messages}
 
-    # Handle sequence case
-    return _trim_messages(state, max_tokens)
+        filtered_messages = trim_messages(messages, max_tokens)
+        # Research agent breaks if you pass dictionary back.
+        # ValueError: Invalid input type <class 'dict'>. Must be a PromptValue, str, or list of BaseMessages.
+        return filtered_messages
+        # return {**state, 'messages': filtered_messages}
+
+    return trim_messages(state, max_tokens)
 
 
 def get_model_token_limit() -> Optional[int]:
@@ -145,7 +148,6 @@ def get_model_token_limit() -> Optional[int]:
         Optional[int]: The token limit if found, None otherwise
     """
     try:
-        # Get model name and provider
         config = _global_memory.get("config") or {}
         provider = config.get("provider")
         model_name = config.get("model")
@@ -160,20 +162,22 @@ def get_model_token_limit() -> Optional[int]:
                     f"Found token limit for {provider}/{model_name}: {token_limit}"
                 )
             else:
-                logger.debug(
-                    f"Could not find token limit for {provider}/{model_name}"
-                )
+                logger.debug(f"Could not find token limit for {provider}/{model_name}")
                 token_limit = None
 
         return token_limit
 
     except Exception as e:
         logger.warning(f"Failed to get model token limit: {e}")
-        return None  # Return None on any error
+        return None
 
 
 def create_agent(
-    model: BaseChatModel, tools: List[Any], *, checkpointer: Any = None
+    model: BaseChatModel,
+    tools: List[Any],
+    *,
+    checkpointer: Any = None,
+    config: Optional[Dict[str, Any]] = None,
 ) -> Any:
     """Create a react agent with the given configuration.
 
@@ -181,32 +185,38 @@ def create_agent(
         model: The LLM model to use
         tools: List of tools to provide to the agent
         checkpointer: Optional memory checkpointer
+        config: Optional configuration dictionary containing settings like:
+            - limit_tokens (bool): Whether to apply token limiting (default: True)
+            - provider (str): The LLM provider name
+            - model (str): The model name
 
     Returns:
         The created agent instance
+
+    Token limiting helps prevent context window overflow by trimming older messages
+    while preserving system messages. It can be disabled by setting
+    config['limit_tokens'] = False.
     """
     try:
         # Get model info and token limit
         config = _global_memory.get("config") or {}
         provider = config.get("provider")
         model_name = config.get("model")
-        token_limit = get_model_token_limit()
+        token_limit = get_model_token_limit() or DEFAULT_TOKEN_LIMIT
 
         # Use REACT agent for Anthropic Claude models, otherwise use CIAYN
         if provider == "anthropic" and model_name and "claude" in model_name:
             logger.debug("Using create_react_agent to instantiate agent.")
-            token_limit = get_model_token_limit() or DEFAULT_TOKEN_LIMIT
             agent_kwargs = {"checkpointer": checkpointer}
-            if token_limit:
+
+            if config.get("limit_tokens", True):
                 agent_kwargs["state_modifier"] = lambda state: limit_tokens(
                     state, max_tokens=token_limit
                 )
+
             return create_react_agent(model, tools, **agent_kwargs)
         else:
-            logger.debug(
-                "Using CiaynAgent agent instance with token limit: %s", token_limit
-            )
-            token_limit = get_model_token_limit() or DEFAULT_TOKEN_LIMIT
+            logger.debug("Using CiaynAgent agent instance")
             return CiaynAgent(model, tools, max_tokens=token_limit)
 
     except Exception as e:
@@ -640,6 +650,7 @@ def run_task_implementation_agent(
     except Exception as e:
         logger.error("Implementation agent failed: %s", str(e), exc_info=True)
         raise
+
 
 _CONTEXT_STACK = []
 _INTERRUPT_CONTEXT = None
