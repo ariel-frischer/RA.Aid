@@ -265,6 +265,5 @@ def test_create_agent_anthropic_token_limiting_disabled(mock_model, mock_memory)
         agent = create_agent(mock_model, [], config={"limit_tokens": False})
 
         assert agent == "react_agent"
-        args = mock_react.call_args
-        # Check that state_modifier is not in the kwargs at all
-        assert "state_modifier" not in mock_react.call_args.kwargs
+        # Verify create_react_agent was called with just model and tools
+        mock_react.assert_called_once_with(mock_model, [])
