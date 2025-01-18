@@ -69,7 +69,7 @@ def test_create_agent_anthropic(mock_model, mock_memory):
         mock_react.assert_called_once_with(
             mock_model, [],
             checkpointer=None,
-            state_modifier=mock_react.call_args[1]["state_modifier"]
+            messages_modifier=mock_react.call_args[1]["messages_modifier"]
         )
 
 
