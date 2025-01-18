@@ -66,7 +66,6 @@ def test_create_agent_anthropic(mock_model, mock_memory):
         agent = create_agent(mock_model, [])
 
         assert agent == "react_agent"
-        # Expect state_modifier by default since limit_tokens defaults to True
         mock_react.assert_called_once_with(mock_model, [], state_modifier=mock_react.call_args[1]['state_modifier'])
 
 
@@ -186,7 +185,8 @@ def test_create_agent_error_handling(mock_model, mock_memory):
         agent = create_agent(mock_model, [])
 
         assert agent == "react_agent"
-        mock_react.assert_called_once_with(mock_model, [])
+        mock_react.assert_called_once_with(mock_model, [], state_modifier=mock_react.call_args[1]['state_modifier'])
+        # mock_react.assert_called_once_with(mock_model, [])
 
 
 def test_create_agent_token_limiting(mock_model, mock_memory):
