@@ -54,7 +54,6 @@ def test_parse_aider_flags(input_flags, expected, description):
 
 def test_aider_config_flag(mocker):
     """Test that aider config flag is properly included in the command when specified."""
-    # Mock global memory with config
     mock_memory = {
         'config': {'aider_config': '/path/to/config.yml'},
         'related_files': {}
@@ -64,10 +63,8 @@ def test_aider_config_flag(mocker):
     # Mock the run_interactive_command to capture the command that would be run
     mock_run = mocker.patch('ra_aid.tools.programmer.run_interactive_command', return_value=(b'', 0))
     
-    # Run the programmer task
     run_programming_task("test instruction")
     
-    # Verify the command contains the config flag
     args = mock_run.call_args[0][0]  # Get the first positional arg (command list)
     assert '--config' in args
     config_index = args.index('--config')
