@@ -3,9 +3,10 @@
 import sys
 import time
 import uuid
-from typing import Optional, Any
+from typing import Optional, Any, Dict
 
 import signal
+from ra_aid.models_tokens import models_tokens
 import threading
 import time
 from typing import Optional
@@ -79,6 +80,25 @@ def output_markdown_message(message: str) -> str:
     console.print(Panel(Markdown(message.strip()), title="🤖 Assistant"))
     return "Message output."
 
+def get_model_token_limit() -> Optional[int]:
+    """Get the token limit for the current model configuration.
+    
+    Returns:
+        Optional[int]: The token limit if found, None otherwise
+    """
+    # Get model name and provider
+    provider = _global_memory.get('config', {}).get('provider')
+    model_name = _global_memory.get('config', {}).get('model')
+    
+    # Get token limit for this model
+    token_limit = None
+    if provider and model_name:
+        provider_tokens = models_tokens.get(provider, {})
+        token_limit = provider_tokens.get(model_name)
+        logger.debug(f"Found token limit for {provider}/{model_name}: {token_limit}")
+    
+    return token_limit
+
 def create_agent(
     model: BaseChatModel,
     tools: List[Any],
@@ -89,24 +109,25 @@ def create_agent(
     
     Args:
         model: The LLM model to use
-        tools: List of tools to provide to the agent
+        tools: List of tools to provide to the agent 
         checkpointer: Optional memory checkpointer
         
     Returns:
         The created agent instance
     """
     try:
-        # Get model name if available
+        # Get model info and token limit
         provider = _global_memory.get('config', {}).get('provider')
         model_name = _global_memory.get('config', {}).get('model')
+        token_limit = get_model_token_limit()
         
-        # Use REACT agent for Anthropic Claude models, otherwise use CIAYN
+        # Use REACT agent for Anthropic Claude models, otherwise use CIAYN 
         if provider == 'anthropic' and 'claude' in model_name:
             logger.debug("Using create_react_agent to instantiate agent.")
             return create_react_agent(model, tools, checkpointer=checkpointer)
         else:
-            logger.debug("Using CiaynAgent agent instance.")
-            return CiaynAgent(model, tools)
+            logger.debug("Using CiaynAgent agent instance with token limit: %s", token_limit)
+            return CiaynAgent(model, tools, max_tokens=token_limit)
             
     except Exception as e:
         # Default to REACT agent if provider/model detection fails
