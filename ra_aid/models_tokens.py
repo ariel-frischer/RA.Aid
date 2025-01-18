@@ -2,6 +2,8 @@
 List of model tokens
 """
 
+DEFAULT_TOKEN_LIMIT = 100000
+
 models_tokens = {
     "openai": {
         "gpt-3.5-turbo-0125": 16385,
@@ -167,6 +169,7 @@ models_tokens = {
         "claude-3-sonnet-20240229": 200000,
         "claude-3-haiku-20240307": 200000,
         "claude-3-5-sonnet-20240620": 200000,
+        "claude-3-5-sonnet-20241022": 200000,
         "claude-3-5-haiku-latest": 200000,
     },
     "bedrock": {

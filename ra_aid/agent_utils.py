@@ -3,23 +3,24 @@
 import sys
 import time
 import uuid
-from typing import Optional, Any, Dict
+from typing import Optional, Any, List, Dict, Sequence
+from langchain_core.messages import BaseMessage, SystemMessage
 
 import signal
-from ra_aid.models_tokens import models_tokens
+from ra_aid.models_tokens import DEFAULT_TOKEN_LIMIT, models_tokens
+from ra_aid.agents.ciayn_agent import CiaynAgent
 import threading
-import time
-from typing import Optional
 
-from ra_aid.project_info import get_project_info, format_project_info, display_project_status
+from ra_aid.project_info import (
+    get_project_info,
+    format_project_info,
+    display_project_status,
+)
 
 from langgraph.prebuilt import create_react_agent
-from ra_aid.agents.ciayn_agent import CiaynAgent
-from ra_aid.project_info import get_project_info, format_project_info, display_project_status
 from ra_aid.console.formatting import print_stage_header, print_error
 from langchain_core.language_models import BaseChatModel
 from langchain_core.tools import tool
-from typing import List, Any
 from ra_aid.console.output import print_agent_output
 from ra_aid.logging_config import get_logger
 from ra_aid.exceptions import AgentInterrupt
@@ -27,7 +28,7 @@ from ra_aid.tool_configs import (
     get_implementation_tools,
     get_research_tools,
     get_planning_tools,
-    get_web_research_tools
+    get_web_research_tools,
 )
 from ra_aid.prompts import (
     IMPLEMENTATION_PROMPT,
@@ -42,11 +43,8 @@ from ra_aid.prompts import (
     HUMAN_PROMPT_SECTION_RESEARCH,
     PLANNING_PROMPT,
     EXPERT_PROMPT_SECTION_PLANNING,
-    WEB_RESEARCH_PROMPT_SECTION_PLANNING,
     HUMAN_PROMPT_SECTION_PLANNING,
     WEB_RESEARCH_PROMPT,
-    EXPERT_PROMPT_SECTION_CHAT,
-    CHAT_PROMPT,
 )
 from langgraph.checkpoint.memory import MemorySaver
 
@@ -61,18 +59,12 @@ from ra_aid.tools.memory import (
     get_memory_value,
     get_related_files,
 )
-from ra_aid.tool_configs import get_research_tools
-from ra_aid.prompts import (
-    RESEARCH_PROMPT,
-    RESEARCH_ONLY_PROMPT,
-    EXPERT_PROMPT_SECTION_RESEARCH,
-    HUMAN_PROMPT_SECTION_RESEARCH
-)
 
 
 console = Console()
 
 logger = get_logger(__name__)
+
 
 @tool
 def output_markdown_message(message: str) -> str:
@@ -80,59 +72,132 @@ def output_markdown_message(message: str) -> str:
     console.print(Panel(Markdown(message.strip()), title="🤖 Assistant"))
     return "Message output."
 
+
+def limit_tokens(
+    state: Sequence[BaseMessage], max_tokens: int = DEFAULT_TOKEN_LIMIT
+) -> Sequence[BaseMessage]:
+    """Limit total tokens in state messages while preserving system message.
+
+    Takes a LangGraph state dict and trims older messages to stay under max_tokens,
+    ensuring the system message is always preserved.
+
+    Args:
+        state: LangGraph state dictionary containing messages list
+        max_tokens: Maximum total tokens allowed (default: DEFAULT_TOKEN_LIMIT)
+
+    Returns:
+        Dict[str, Any]: Modified state dict with trimmed messages
+
+    Example:
+        new_state = limit_tokens(state, max_tokens=8000)
+    """
+    if not state:
+        return state
+        
+    messages = state
+
+    initial_message = messages[0]
+
+    estimate_tokens = CiaynAgent._estimate_tokens
+    initial_message_tokens = estimate_tokens(initial_message) if initial_message else 0
+    remaining_msgs = messages[1:] if initial_message else messages
+
+    # Remove messages from start until under limit
+    while (
+        remaining_msgs
+        and sum(estimate_tokens(msg) for msg in remaining_msgs)
+        + initial_message_tokens
+        > max_tokens
+    ):
+        remaining_msgs.pop(0)
+
+    filtered_messages = [initial_message] + remaining_msgs if initial_message else remaining_msgs
+    
+    return filtered_messages
+
+
 def get_model_token_limit() -> Optional[int]:
     """Get the token limit for the current model configuration.
-    
+
     Returns:
         Optional[int]: The token limit if found, None otherwise
     """
-    # Get model name and provider
-    provider = _global_memory.get('config', {}).get('provider')
-    model_name = _global_memory.get('config', {}).get('model')
-    
-    # Get token limit for this model
-    token_limit = None
-    if provider and model_name:
-        provider_tokens = models_tokens.get(provider, {})
-        token_limit = provider_tokens.get(model_name)
-        logger.debug(f"Found token limit for {provider}/{model_name}: {token_limit}")
-    
-    return token_limit
+    try:
+        # Get model name and provider
+        config = _global_memory.get("config") or {}
+        provider = config.get("provider")
+        model_name = config.get("model")
+
+        # Get token limit for this model
+        token_limit = None
+        if provider and model_name:
+            provider_tokens = models_tokens.get(provider, {})
+            token_limit = provider_tokens.get(model_name)
+            if token_limit:
+                logger.debug(
+                    f"Found token limit for {provider}/{model_name}: {token_limit}"
+                )
+            else:
+                logger.debug(
+                    f"Could not find token limit for {provider}/{model_name}"
+                )
+                token_limit = None
+
+        return token_limit
+
+    except Exception as e:
+        logger.warning(f"Failed to get model token limit: {e}")
+        return None  # Return None on any error
+
 
 def create_agent(
-    model: BaseChatModel,
-    tools: List[Any],
-    *,
-    checkpointer: Any = None
+    model: BaseChatModel, tools: List[Any], *, checkpointer: Any = None
 ) -> Any:
     """Create a react agent with the given configuration.
-    
+
     Args:
         model: The LLM model to use
-        tools: List of tools to provide to the agent 
+        tools: List of tools to provide to the agent
         checkpointer: Optional memory checkpointer
-        
+
     Returns:
         The created agent instance
     """
     try:
         # Get model info and token limit
-        provider = _global_memory.get('config', {}).get('provider')
-        model_name = _global_memory.get('config', {}).get('model')
+        config = _global_memory.get("config") or {}
+        provider = config.get("provider")
+        model_name = config.get("model")
         token_limit = get_model_token_limit()
-        
-        # Use REACT agent for Anthropic Claude models, otherwise use CIAYN 
-        if provider == 'anthropic' and 'claude' in model_name:
+
+        # Use REACT agent for Anthropic Claude models, otherwise use CIAYN
+        if provider == "anthropic" and model_name and "claude" in model_name:
             logger.debug("Using create_react_agent to instantiate agent.")
-            return create_react_agent(model, tools, checkpointer=checkpointer)
+            token_limit = get_model_token_limit() or DEFAULT_TOKEN_LIMIT
+            agent_kwargs = {"checkpointer": checkpointer}
+            if token_limit:
+                agent_kwargs["state_modifier"] = lambda state: limit_tokens(
+                    state, max_tokens=token_limit
+                )
+            return create_react_agent(model, tools, **agent_kwargs)
         else:
-            logger.debug("Using CiaynAgent agent instance with token limit: %s", token_limit)
+            logger.debug(
+                "Using CiaynAgent agent instance with token limit: %s", token_limit
+            )
+            token_limit = get_model_token_limit() or DEFAULT_TOKEN_LIMIT
             return CiaynAgent(model, tools, max_tokens=token_limit)
-            
+
     except Exception as e:
         # Default to REACT agent if provider/model detection fails
         logger.warning(f"Failed to detect model type: {e}. Defaulting to REACT agent.")
-        return create_react_agent(model, tools, checkpointer=checkpointer)
+        token_limit = get_model_token_limit()
+        return create_react_agent(
+            model,
+            tools,
+            checkpointer=checkpointer,
+            state_modifier=lambda state: limit_tokens(state, max_tokens=token_limit),
+        )
+
 
 def run_research_agent(
     base_task_or_query: str,
@@ -145,7 +210,7 @@ def run_research_agent(
     memory: Optional[Any] = None,
     config: Optional[dict] = None,
     thread_id: Optional[str] = None,
-    console_message: Optional[str] = None
+    console_message: Optional[str] = None,
 ) -> Optional[str]:
     """Run a research agent with the given configuration.
 
@@ -174,8 +239,13 @@ def run_research_agent(
     """
     thread_id = thread_id or str(uuid.uuid4())
     logger.debug("Starting research agent with thread_id=%s", thread_id)
-    logger.debug("Research configuration: expert=%s, research_only=%s, hil=%s, web=%s",
-                expert_enabled, research_only, hil, web_research_enabled)
+    logger.debug(
+        "Research configuration: expert=%s, research_only=%s, hil=%s, web=%s",
+        expert_enabled,
+        research_only,
+        hil,
+        web_research_enabled,
+    )
 
     # Initialize memory if not provided
     if memory is None:
@@ -190,7 +260,7 @@ def run_research_agent(
         research_only=research_only,
         expert_enabled=expert_enabled,
         human_interaction=hil,
-        web_research_enabled=config.get('web_research_enabled', False)
+        web_research_enabled=config.get("web_research_enabled", False),
     )
 
     # Create agent
@@ -199,7 +269,11 @@ def run_research_agent(
     # Format prompt sections
     expert_section = EXPERT_PROMPT_SECTION_RESEARCH if expert_enabled else ""
     human_section = HUMAN_PROMPT_SECTION_RESEARCH if hil else ""
-    web_research_section = WEB_RESEARCH_PROMPT_SECTION_RESEARCH if config.get('web_research_enabled') else ""
+    web_research_section = (
+        WEB_RESEARCH_PROMPT_SECTION_RESEARCH
+        if config.get("web_research_enabled")
+        else ""
+    )
 
     # Get research context from memory
     key_facts = _global_memory.get("key_facts", "")
@@ -217,29 +291,30 @@ def run_research_agent(
     # Build prompt
     prompt = (RESEARCH_ONLY_PROMPT if research_only else RESEARCH_PROMPT).format(
         base_task=base_task_or_query,
-        research_only_note='' if research_only else ' Only request implementation if the user explicitly asked for changes to be made.',
+        research_only_note=""
+        if research_only
+        else " Only request implementation if the user explicitly asked for changes to be made.",
         expert_section=expert_section,
         human_section=human_section,
         web_research_section=web_research_section,
         key_facts=key_facts,
-        work_log=get_memory_value('work_log'),
+        work_log=get_memory_value("work_log"),
         code_snippets=code_snippets,
         related_files=related_files,
-        project_info=formatted_project_info
+        project_info=formatted_project_info,
     )
 
     # Set up configuration
-    run_config = {
-         "configurable": {"thread_id": thread_id},
-        "recursion_limit": 100
-    }
+    run_config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 100}
     if config:
         run_config.update(config)
 
     try:
         # Display console message if provided
         if console_message:
-            console.print(Panel(Markdown(console_message), title="🔬 Looking into it..."))
+            console.print(
+                Panel(Markdown(console_message), title="🔬 Looking into it...")
+            )
 
         if project_info:
             display_project_status(project_info)
@@ -260,13 +335,14 @@ def run_research_agent(
                 memory=memory,
                 config=config,
                 thread_id=thread_id,
-                console_message=console_message
+                console_message=console_message,
             )
     except (KeyboardInterrupt, AgentInterrupt):
         raise
     except Exception as e:
         logger.error("Research agent failed: %s", str(e), exc_info=True)
         raise
+
 
 def run_web_research_agent(
     query: str,
@@ -278,7 +354,7 @@ def run_web_research_agent(
     memory: Optional[Any] = None,
     config: Optional[dict] = None,
     thread_id: Optional[str] = None,
-    console_message: Optional[str] = None
+    console_message: Optional[str] = None,
 ) -> Optional[str]:
     """Run a web research agent with the given configuration.
 
@@ -305,8 +381,12 @@ def run_web_research_agent(
     """
     thread_id = thread_id or str(uuid.uuid4())
     logger.debug("Starting web research agent with thread_id=%s", thread_id)
-    logger.debug("Web research configuration: expert=%s, hil=%s, web=%s",
-                expert_enabled, hil, web_research_enabled)
+    logger.debug(
+        "Web research configuration: expert=%s, hil=%s, web=%s",
+        expert_enabled,
+        hil,
+        web_research_enabled,
+    )
 
     # Initialize memory if not provided
     if memory is None:
@@ -338,14 +418,11 @@ def run_web_research_agent(
         human_section=human_section,
         key_facts=key_facts,
         code_snippets=code_snippets,
-        related_files=related_files
+        related_files=related_files,
     )
 
     # Set up configuration
-    run_config = {
-        "configurable": {"thread_id": thread_id},
-        "recursion_limit": 100
-    }
+    run_config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 100}
     if config:
         run_config.update(config)
 
@@ -363,6 +440,7 @@ def run_web_research_agent(
         logger.error("Web research agent failed: %s", str(e), exc_info=True)
         raise
 
+
 def run_planning_agent(
     base_task: str,
     model,
@@ -371,7 +449,7 @@ def run_planning_agent(
     hil: bool = False,
     memory: Optional[Any] = None,
     config: Optional[dict] = None,
-    thread_id: Optional[str] = None
+    thread_id: Optional[str] = None,
 ) -> Optional[str]:
     """Run a planning agent to create implementation plans.
 
@@ -400,7 +478,10 @@ def run_planning_agent(
         thread_id = str(uuid.uuid4())
 
     # Configure tools
-    tools = get_planning_tools(expert_enabled=expert_enabled, web_research_enabled=config.get('web_research_enabled', False))
+    tools = get_planning_tools(
+        expert_enabled=expert_enabled,
+        web_research_enabled=config.get("web_research_enabled", False),
+    )
 
     # Create agent
     agent = create_agent(model, tools, checkpointer=memory)
@@ -408,7 +489,11 @@ def run_planning_agent(
     # Format prompt sections
     expert_section = EXPERT_PROMPT_SECTION_PLANNING if expert_enabled else ""
     human_section = HUMAN_PROMPT_SECTION_PLANNING if hil else ""
-    web_research_section = WEB_RESEARCH_PROMPT_SECTION_PLANNING if config.get('web_research_enabled') else ""
+    web_research_section = (
+        WEB_RESEARCH_PROMPT_SECTION_PLANNING
+        if config.get("web_research_enabled")
+        else ""
+    )
 
     # Build prompt
     planning_prompt = PLANNING_PROMPT.format(
@@ -416,19 +501,18 @@ def run_planning_agent(
         human_section=human_section,
         web_research_section=web_research_section,
         base_task=base_task,
-        research_notes=get_memory_value('research_notes'),
+        research_notes=get_memory_value("research_notes"),
         related_files="\n".join(get_related_files()),
-        key_facts=get_memory_value('key_facts'),
-        key_snippets=get_memory_value('key_snippets'),
-        work_log=get_memory_value('work_log'),
-        research_only_note='' if config.get('research_only') else ' Only request implementation if the user explicitly asked for changes to be made.'
+        key_facts=get_memory_value("key_facts"),
+        key_snippets=get_memory_value("key_snippets"),
+        work_log=get_memory_value("work_log"),
+        research_only_note=""
+        if config.get("research_only")
+        else " Only request implementation if the user explicitly asked for changes to be made.",
     )
 
     # Set up configuration
-    run_config = {
-        "configurable": {"thread_id": thread_id},
-        "recursion_limit": 100
-    }
+    run_config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 100}
     if config:
         run_config.update(config)
 
@@ -442,6 +526,7 @@ def run_planning_agent(
         logger.error("Planning agent failed: %s", str(e), exc_info=True)
         raise
 
+
 def run_task_implementation_agent(
     base_task: str,
     tasks: list,
@@ -454,7 +539,7 @@ def run_task_implementation_agent(
     web_research_enabled: bool = False,
     memory: Optional[Any] = None,
     config: Optional[dict] = None,
-    thread_id: Optional[str] = None
+    thread_id: Optional[str] = None,
 ) -> Optional[str]:
     """Run an implementation agent for a specific task.
 
@@ -475,7 +560,11 @@ def run_task_implementation_agent(
     """
     thread_id = thread_id or str(uuid.uuid4())
     logger.debug("Starting implementation agent with thread_id=%s", thread_id)
-    logger.debug("Implementation configuration: expert=%s, web=%s", expert_enabled, web_research_enabled)
+    logger.debug(
+        "Implementation configuration: expert=%s, web=%s",
+        expert_enabled,
+        web_research_enabled,
+    )
     logger.debug("Task details: base_task=%s, current_task=%s", base_task, task)
     logger.debug("Related files: %s", related_files)
 
@@ -488,7 +577,10 @@ def run_task_implementation_agent(
         thread_id = str(uuid.uuid4())
 
     # Configure tools
-    tools = get_implementation_tools(expert_enabled=expert_enabled, web_research_enabled=config.get('web_research_enabled', False))
+    tools = get_implementation_tools(
+        expert_enabled=expert_enabled,
+        web_research_enabled=config.get("web_research_enabled", False),
+    )
 
     # Create agent
     agent = create_agent(model, tools, checkpointer=memory)
@@ -500,20 +592,21 @@ def run_task_implementation_agent(
         tasks=tasks,
         plan=plan,
         related_files=related_files,
-        key_facts=get_memory_value('key_facts'),
-        key_snippets=get_memory_value('key_snippets'),
-        research_notes=get_memory_value('research_notes'),
-        work_log=get_memory_value('work_log'),
+        key_facts=get_memory_value("key_facts"),
+        key_snippets=get_memory_value("key_snippets"),
+        research_notes=get_memory_value("research_notes"),
+        work_log=get_memory_value("work_log"),
         expert_section=EXPERT_PROMPT_SECTION_IMPLEMENTATION if expert_enabled else "",
-        human_section=HUMAN_PROMPT_SECTION_IMPLEMENTATION if _global_memory.get('config', {}).get('hil', False) else "",
-        web_research_section=WEB_RESEARCH_PROMPT_SECTION_CHAT if config.get('web_research_enabled') else ""
+        human_section=HUMAN_PROMPT_SECTION_IMPLEMENTATION
+        if _global_memory.get("config", {}).get("hil", False)
+        else "",
+        web_research_section=WEB_RESEARCH_PROMPT_SECTION_CHAT
+        if config.get("web_research_enabled")
+        else "",
     )
 
     # Set up configuration
-    run_config = {
-        "configurable": {"thread_id": thread_id},
-        "recursion_limit": 100
-    }
+    run_config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 100}
     if config:
         run_config.update(config)
 
@@ -530,6 +623,7 @@ _CONTEXT_STACK = []
 _INTERRUPT_CONTEXT = None
 _FEEDBACK_MODE = False
 
+
 def _request_interrupt(signum, frame):
     global _INTERRUPT_CONTEXT
     if _CONTEXT_STACK:
@@ -541,6 +635,7 @@ def _request_interrupt(signum, frame):
         print()
         sys.exit(0)
 
+
 class InterruptibleSection:
     def __enter__(self):
         _CONTEXT_STACK.append(self)
@@ -549,9 +644,11 @@ class InterruptibleSection:
     def __exit__(self, exc_type, exc_value, traceback):
         _CONTEXT_STACK.remove(self)
 
+
 def check_interrupt():
     if _CONTEXT_STACK and _INTERRUPT_CONTEXT is _CONTEXT_STACK[-1]:
         raise AgentInterrupt("Interrupt requested")
+
 
 def run_agent_with_retry(agent, prompt: str, config: dict) -> Optional[str]:
     """Run an agent with retry logic for API errors."""
@@ -567,48 +664,68 @@ def run_agent_with_retry(agent, prompt: str, config: dict) -> Optional[str]:
     with InterruptibleSection():
         try:
             # Track agent execution depth
-            current_depth = _global_memory.get('agent_depth', 0)
-            _global_memory['agent_depth'] = current_depth + 1
+            current_depth = _global_memory.get("agent_depth", 0)
+            _global_memory["agent_depth"] = current_depth + 1
 
             for attempt in range(max_retries):
                 logger.debug("Attempt %d/%d", attempt + 1, max_retries)
                 check_interrupt()
                 try:
-                    for chunk in agent.stream({"messages": [HumanMessage(content=prompt)]}, config):
+                    for chunk in agent.stream(
+                        {"messages": [HumanMessage(content=prompt)]}, config
+                    ):
                         logger.debug("Agent output: %s", chunk)
                         check_interrupt()
                         print_agent_output(chunk)
-                        if _global_memory['plan_completed']:
-                            _global_memory['plan_completed'] = False
-                            _global_memory['task_completed'] = False
-                            _global_memory['completion_message'] = ''
+                        if _global_memory["plan_completed"]:
+                            _global_memory["plan_completed"] = False
+                            _global_memory["task_completed"] = False
+                            _global_memory["completion_message"] = ""
                             break
-                        if _global_memory['task_completed']:
-                            _global_memory['task_completed'] = False
-                            _global_memory['completion_message'] = ''
+                        if _global_memory["task_completed"]:
+                            _global_memory["task_completed"] = False
+                            _global_memory["completion_message"] = ""
                             break
                     logger.debug("Agent run completed successfully")
                     return "Agent run completed successfully"
                 except (KeyboardInterrupt, AgentInterrupt):
                     raise
-                except (InternalServerError, APITimeoutError, RateLimitError, APIError, ValueError) as e:
+                except (
+                    InternalServerError,
+                    APITimeoutError,
+                    RateLimitError,
+                    APIError,
+                    ValueError,
+                ) as e:
                     if isinstance(e, ValueError):
                         error_str = str(e).lower()
-                        if 'code' not in error_str or '429' not in error_str:
+                        if "code" not in error_str or "429" not in error_str:
                             raise  # Re-raise ValueError if it's not a Lambda 429
                     if attempt == max_retries - 1:
                         logger.error("Max retries reached, failing: %s", str(e))
-                        raise RuntimeError(f"Max retries ({max_retries}) exceeded. Last error: {e}")
-                    logger.warning("API error (attempt %d/%d): %s", attempt + 1, max_retries, str(e))
-                    delay = base_delay * (2 ** attempt)
-                    print_error(f"Encountered {e.__class__.__name__}: {e}. Retrying in {delay}s... (Attempt {attempt+1}/{max_retries})")
+                        raise RuntimeError(
+                            f"Max retries ({max_retries}) exceeded. Last error: {e}"
+                        )
+                    logger.warning(
+                        "API error (attempt %d/%d): %s",
+                        attempt + 1,
+                        max_retries,
+                        str(e),
+                    )
+                    delay = base_delay * (2**attempt)
+                    print_error(
+                        f"Encountered {e.__class__.__name__}: {e}. Retrying in {delay}s... (Attempt {attempt+1}/{max_retries})"
+                    )
                     start = time.monotonic()
                     while time.monotonic() - start < delay:
                         check_interrupt()
                         time.sleep(0.1)
         finally:
             # Reset depth tracking
-            _global_memory['agent_depth'] = _global_memory.get('agent_depth', 1) - 1
+            _global_memory["agent_depth"] = _global_memory.get("agent_depth", 1) - 1
 
-            if original_handler and threading.current_thread() is threading.main_thread():
+            if (
+                original_handler
+                and threading.current_thread() is threading.main_thread()
+            ):
                 signal.signal(signal.SIGINT, original_handler)
