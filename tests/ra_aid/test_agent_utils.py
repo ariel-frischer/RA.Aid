@@ -173,7 +173,7 @@ def test_limit_tokens_none_messages():
     assert result is None
 
 
-
+def test_create_agent_error_handling(mock_model, mock_memory):
     """Test create_agent error handling."""
     mock_memory.get.side_effect = Exception("Memory error")
 
