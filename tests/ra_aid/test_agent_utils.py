@@ -66,12 +66,7 @@ def test_create_agent_anthropic(mock_model, mock_memory):
         agent = create_agent(mock_model, [])
 
         assert agent == "react_agent"
-        mock_react.assert_called_once_with(
-            mock_model,
-            [],
-            checkpointer=None,
-            state_modifier=mock_react.call_args[1]["state_modifier"],
-        )
+        mock_react.assert_called_once_with(mock_model, [])
 
 
 def test_create_agent_openai(mock_model, mock_memory):
@@ -190,12 +185,7 @@ def test_create_agent_error_handling(mock_model, mock_memory):
         agent = create_agent(mock_model, [])
 
         assert agent == "react_agent"
-        mock_react.assert_called_once_with(
-            mock_model,
-            [],
-            checkpointer=None,
-            state_modifier=mock_react.call_args[1]["state_modifier"],
-        )
+        mock_react.assert_called_once_with(mock_model, [])
 
 
 def test_create_agent_token_limiting(mock_model, mock_memory):

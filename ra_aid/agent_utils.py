@@ -234,8 +234,9 @@ def create_agent(
         # Use REACT agent for Anthropic Claude models, otherwise use CIAYN
         if provider == "anthropic" and model_name and "claude" in model_name:
             logger.debug("Using create_react_agent to instantiate agent.")
-            agent_kwargs = build_agent_kwargs(checkpointer, config, token_limit)
-            return create_react_agent(model, tools, **agent_kwargs)
+            if checkpointer is not None:
+                return create_react_agent(model, tools, checkpointer=checkpointer)
+            return create_react_agent(model, tools)
         else:
             logger.debug("Using CiaynAgent agent instance")
             return CiaynAgent(model, tools, max_tokens=token_limit)
