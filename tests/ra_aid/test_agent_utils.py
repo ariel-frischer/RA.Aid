@@ -121,7 +121,6 @@ def test_create_agent_missing_config(mock_model, mock_memory):
             mock_model,
             [],
             max_tokens=DEFAULT_TOKEN_LIMIT,
-            state_modifier=mock_ciayn.call_args[1]["state_modifier"],
         )
 
 
