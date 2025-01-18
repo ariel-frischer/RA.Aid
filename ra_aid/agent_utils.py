@@ -172,6 +172,31 @@ def get_model_token_limit() -> Optional[int]:
         return None
 
 
+def _build_agent_kwargs(
+    checkpointer: Optional[Any] = None,
+    config: Optional[Dict[str, Any]] = None,
+    token_limit: Optional[int] = None
+) -> Dict[str, Any]:
+    """Build kwargs dictionary for agent creation.
+    
+    Args:
+        checkpointer: Optional memory checkpointer
+        config: Optional configuration dictionary
+        token_limit: Optional token limit for the model
+        
+    Returns:
+        Dictionary of kwargs for agent creation
+    """
+    agent_kwargs = {"checkpointer": checkpointer}
+
+    if config and config.get("limit_tokens", True):
+        agent_kwargs["state_modifier"] = lambda state: limit_tokens(
+            state, max_tokens=token_limit
+        )
+    
+    return agent_kwargs
+
+
 def create_agent(
     model: BaseChatModel,
     tools: List[Any],
@@ -207,13 +232,7 @@ def create_agent(
         # Use REACT agent for Anthropic Claude models, otherwise use CIAYN
         if provider == "anthropic" and model_name and "claude" in model_name:
             logger.debug("Using create_react_agent to instantiate agent.")
-            agent_kwargs = {"checkpointer": checkpointer}
-
-            if config.get("limit_tokens", True):
-                agent_kwargs["state_modifier"] = lambda state: limit_tokens(
-                    state, max_tokens=token_limit
-                )
-
+            agent_kwargs = _build_agent_kwargs(checkpointer, config, token_limit)
             return create_react_agent(model, tools, **agent_kwargs)
         else:
             logger.debug("Using CiaynAgent agent instance")
@@ -223,12 +242,8 @@ def create_agent(
         # Default to REACT agent if provider/model detection fails
         logger.warning(f"Failed to detect model type: {e}. Defaulting to REACT agent.")
         token_limit = get_model_token_limit()
-        return create_react_agent(
-            model,
-            tools,
-            checkpointer=checkpointer,
-            state_modifier=lambda state: limit_tokens(state, max_tokens=token_limit),
-        )
+        agent_kwargs = _build_agent_kwargs(checkpointer, config, token_limit)
+        return create_react_agent(model, tools, **agent_kwargs)
 
 
 def run_research_agent(
