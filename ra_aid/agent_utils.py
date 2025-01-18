@@ -247,8 +247,7 @@ def create_agent(
             return create_react_agent(model, tools, **agent_kwargs)
         else:
             logger.debug("Using CiaynAgent agent instance")
-            agent_kwargs = build_agent_kwargs(checkpointer, config, token_limit, is_react_agent=False)
-            return CiaynAgent(model, tools, **agent_kwargs)
+            return CiaynAgent(model, tools, max_tokens=token_limit)
 
     except Exception as e:
         # Default to REACT agent if provider/model detection fails

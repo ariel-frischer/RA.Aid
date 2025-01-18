@@ -88,8 +88,7 @@ def test_create_agent_openai(mock_model, mock_memory):
         mock_ciayn.assert_called_once_with(
             mock_model,
             [],
-            max_tokens=models_tokens["openai"]["gpt-4"],
-            state_modifier=mock_ciayn.call_args[1]["state_modifier"],
+            max_tokens=models_tokens["openai"]["gpt-4"]
         )
 
 
@@ -105,8 +104,7 @@ def test_create_agent_no_token_limit(mock_model, mock_memory):
         mock_ciayn.assert_called_once_with(
             mock_model,
             [],
-            max_tokens=DEFAULT_TOKEN_LIMIT,
-            state_modifier=mock_ciayn.call_args[1]["state_modifier"],
+            max_tokens=DEFAULT_TOKEN_LIMIT
         )
 
 
@@ -211,8 +209,7 @@ def test_create_agent_token_limiting(mock_model, mock_memory):
         agent = create_agent(mock_model, [], config={})
         
         assert agent == "ciayn_agent"
-        assert "state_modifier" in mock_ciayn.call_args[1]
-        assert callable(mock_ciayn.call_args[1]["state_modifier"])
+        assert "max_tokens" in mock_ciayn.call_args[1]
 
     # Test with token limiting disabled
     with patch("ra_aid.agent_utils.CiaynAgent") as mock_ciayn:
@@ -220,7 +217,7 @@ def test_create_agent_token_limiting(mock_model, mock_memory):
         agent = create_agent(mock_model, [], config={"limit_tokens": False})
         
         assert agent == "ciayn_agent"
-        assert "state_modifier" not in mock_ciayn.call_args[1]
+        assert "max_tokens" in mock_ciayn.call_args[1]
 
 
 def test_create_agent_with_checkpointer(mock_model, mock_memory):
@@ -241,8 +238,7 @@ def test_create_agent_with_checkpointer(mock_model, mock_memory):
         mock_ciayn.assert_called_once_with(
             mock_model,
             [],
-            max_tokens=models_tokens["openai"]["gpt-4"],
-            state_modifier=mock_ciayn.call_args[1]["state_modifier"],
+            max_tokens=models_tokens["openai"]["gpt-4"]
         )
 
 
