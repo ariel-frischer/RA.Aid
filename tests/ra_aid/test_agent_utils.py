@@ -174,20 +174,21 @@ def test_limit_tokens_none_messages():
 
 def test_create_agent_error_handling(mock_model, mock_memory):
     """Test create_agent error handling."""
-    mock_memory.configure_mock(**{
-        "get.return_value": {},
-        "get_model_token_limit.side_effect": Exception("Memory error")
-    })
+    mock_memory.get.return_value = {"provider": "anthropic", "model": "claude-2"}
 
     with patch("ra_aid.agent_utils.create_react_agent") as mock_react:
-        mock_react.return_value = "react_agent"
+        # Simulate create_react_agent failing
+        mock_react.side_effect = Exception("Agent creation failed")
+        
+        # Agent creation should fall back to CiaynAgent
         agent = create_agent(mock_model, [])
-
-        assert agent == "react_agent"
-        mock_react.assert_called_once_with(
-            mock_model, [], state_modifier=mock_react.call_args[1]["state_modifier"]
-        )
-        # mock_react.assert_called_once_with(mock_model, [])
+        
+        # Verify we got a CiaynAgent instance
+        from ra_aid.agents.ciayn_agent import CiaynAgent
+        assert isinstance(agent, CiaynAgent)
+        
+        # Verify create_react_agent was attempted
+        mock_react.assert_called_once()
 
 
 def test_create_agent_token_limiting(mock_model, mock_memory):
