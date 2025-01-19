@@ -111,7 +111,7 @@ def trim_messages(
 
 def limit_tokens(
     state: Sequence[BaseMessage] | Dict[str, Any], max_tokens: int = DEFAULT_TOKEN_LIMIT
-) -> Sequence[BaseMessage] | Dict[str, Any]:
+) -> Sequence[BaseMessage]:
     """Limit total tokens in state messages while preserving the system message.
 
     Takes either a LangGraph state list of messages or a dict with messages key and trims
@@ -131,14 +131,12 @@ def limit_tokens(
         messages = state.get("messages", [])
         if not messages:
             return state
+    else:
+        messages = state
 
-        filtered_messages = trim_messages(messages, max_tokens)
-        # Research agent breaks if you pass dictionary back.
-        # ValueError: Invalid input type <class 'dict'>. Must be a PromptValue, str, or list of BaseMessages.
-        return filtered_messages
-        # return {**state, 'messages': filtered_messages}
+    filtered_messages = trim_messages(messages, max_tokens)
 
-    return trim_messages(state, max_tokens)
+    return filtered_messages
 
 
 def get_model_token_limit() -> Optional[int]:
@@ -193,7 +191,7 @@ def build_agent_kwargs(
         agent_kwargs["checkpointer"] = checkpointer
 
     if config is None or config.get("limit_tokens", True):
-        def state_modifier(state):
+        def state_modifier(state: Sequence[BaseMessage] | Dict[str, Any]) -> Sequence[BaseMessage]:
             return limit_tokens(state, max_tokens=token_limit)
         agent_kwargs["state_modifier"] = state_modifier
 
