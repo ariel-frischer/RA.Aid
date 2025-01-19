@@ -233,6 +233,7 @@ def create_agent(
         if provider == "anthropic" and model_name and "claude" in model_name:
             logger.debug("Using create_react_agent to instantiate agent.")
             agent_kwargs = build_agent_kwargs(checkpointer, config, token_limit)
+            print(f"agent_kwargs={agent_kwargs}")
             return create_react_agent(model, tools, **agent_kwargs)
         else:
             logger.debug("Using CiaynAgent agent instance")
