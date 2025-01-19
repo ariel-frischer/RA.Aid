@@ -66,7 +66,9 @@ def test_create_agent_anthropic(mock_model, mock_memory):
         agent = create_agent(mock_model, [])
 
         assert agent == "react_agent"
-        mock_react.assert_called_once_with(mock_model, [], state_modifier=mock_react.call_args[1]['state_modifier'])
+        mock_react.assert_called_once_with(
+            mock_model, [], state_modifier=mock_react.call_args[1]["state_modifier"]
+        )
 
 
 def test_create_agent_openai(mock_model, mock_memory):
@@ -75,15 +77,11 @@ def test_create_agent_openai(mock_model, mock_memory):
 
     with patch("ra_aid.agent_utils.CiaynAgent") as mock_ciayn:
         mock_ciayn.return_value = "ciayn_agent"
-        agent = create_agent(
-            mock_model, [], config={"provider": "openai", "model": "gpt-4"}
-        )
+        agent = create_agent(mock_model, [])
 
         assert agent == "ciayn_agent"
         mock_ciayn.assert_called_once_with(
-            mock_model,
-            [],
-            max_tokens=models_tokens["openai"]["gpt-4"]
+            mock_model, [], max_tokens=models_tokens["openai"]["gpt-4"]
         )
 
 
@@ -93,23 +91,21 @@ def test_create_agent_no_token_limit(mock_model, mock_memory):
 
     with patch("ra_aid.agent_utils.CiaynAgent") as mock_ciayn:
         mock_ciayn.return_value = "ciayn_agent"
-        agent = create_agent(mock_model, [], config={"provider": "other"})
+        agent = create_agent(mock_model, [])
 
         assert agent == "ciayn_agent"
         mock_ciayn.assert_called_once_with(
-            mock_model,
-            [],
-            max_tokens=DEFAULT_TOKEN_LIMIT
+            mock_model, [], max_tokens=DEFAULT_TOKEN_LIMIT
         )
 
 
 def test_create_agent_missing_config(mock_model, mock_memory):
     """Test create_agent with missing configuration."""
-    mock_memory.get.return_value = None
+    mock_memory.get.return_value = {"provider": "openai"}
 
     with patch("ra_aid.agent_utils.CiaynAgent") as mock_ciayn:
         mock_ciayn.return_value = "ciayn_agent"
-        agent = create_agent(mock_model, [], config={"provider": "other"})
+        agent = create_agent(mock_model, [])
 
         assert agent == "ciayn_agent"
         mock_ciayn.assert_called_once_with(
@@ -185,7 +181,9 @@ def test_create_agent_error_handling(mock_model, mock_memory):
         agent = create_agent(mock_model, [])
 
         assert agent == "react_agent"
-        mock_react.assert_called_once_with(mock_model, [], state_modifier=mock_react.call_args[1]['state_modifier'])
+        mock_react.assert_called_once_with(
+            mock_model, [], state_modifier=mock_react.call_args[1]["state_modifier"]
+        )
         # mock_react.assert_called_once_with(mock_model, [])
 
 
@@ -196,16 +194,16 @@ def test_create_agent_token_limiting(mock_model, mock_memory):
     # Test with token limiting enabled (default)
     with patch("ra_aid.agent_utils.CiaynAgent") as mock_ciayn:
         mock_ciayn.return_value = "ciayn_agent"
-        agent = create_agent(mock_model, [], config={})
-        
+        agent = create_agent(mock_model, [])
+
         assert agent == "ciayn_agent"
         assert "max_tokens" in mock_ciayn.call_args[1]
 
     # Test with token limiting disabled
     with patch("ra_aid.agent_utils.CiaynAgent") as mock_ciayn:
         mock_ciayn.return_value = "ciayn_agent"
-        agent = create_agent(mock_model, [], config={"limit_tokens": False})
-        
+        agent = create_agent(mock_model, [])
+
         assert agent == "ciayn_agent"
         assert "max_tokens" in mock_ciayn.call_args[1]
 
@@ -217,24 +215,21 @@ def test_create_agent_with_checkpointer(mock_model, mock_memory):
 
     with patch("ra_aid.agent_utils.CiaynAgent") as mock_ciayn:
         mock_ciayn.return_value = "ciayn_agent"
-        agent = create_agent(
-            mock_model,
-            [],
-            checkpointer=mock_checkpointer,
-            config={"provider": "openai", "model": "gpt-4"},
-        )
+        agent = create_agent(mock_model, [], checkpointer=mock_checkpointer)
 
         assert agent == "ciayn_agent"
         mock_ciayn.assert_called_once_with(
-            mock_model,
-            [],
-            max_tokens=models_tokens["openai"]["gpt-4"]
+            mock_model, [], max_tokens=models_tokens["openai"]["gpt-4"]
         )
 
 
 def test_create_agent_anthropic_token_limiting_enabled(mock_model, mock_memory):
     """Test create_agent sets up token limiting for Claude models when enabled."""
-    mock_memory.get.return_value = {"provider": "anthropic", "model": "claude-2"}
+    mock_memory.get.return_value = {
+        "provider": "anthropic",
+        "model": "claude-2",
+        "limit_tokens": True,
+    }
 
     with (
         patch("ra_aid.agent_utils.create_react_agent") as mock_react,
@@ -243,7 +238,7 @@ def test_create_agent_anthropic_token_limiting_enabled(mock_model, mock_memory):
         mock_react.return_value = "react_agent"
         mock_limit.return_value = 100000
 
-        agent = create_agent(mock_model, [], config={"limit_tokens": True})
+        agent = create_agent(mock_model, [])
 
         assert agent == "react_agent"
         args = mock_react.call_args
@@ -253,7 +248,11 @@ def test_create_agent_anthropic_token_limiting_enabled(mock_model, mock_memory):
 
 def test_create_agent_anthropic_token_limiting_disabled(mock_model, mock_memory):
     """Test create_agent doesn't set up token limiting for Claude models when disabled."""
-    mock_memory.get.return_value = {"provider": "anthropic", "model": "claude-2"}
+    mock_memory.get.return_value = {
+        "provider": "anthropic",
+        "model": "claude-2",
+        "limit_tokens": False,
+    }
 
     with (
         patch("ra_aid.agent_utils.create_react_agent") as mock_react,
@@ -262,8 +261,7 @@ def test_create_agent_anthropic_token_limiting_disabled(mock_model, mock_memory)
         mock_react.return_value = "react_agent"
         mock_limit.return_value = 100000
 
-        agent = create_agent(mock_model, [], config={"limit_tokens": False})
+        agent = create_agent(mock_model, [])
 
         assert agent == "react_agent"
-        # Verify create_react_agent was called with just model and tools
         mock_react.assert_called_once_with(mock_model, [])
