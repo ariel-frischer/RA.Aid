@@ -3,12 +3,14 @@
 import sys
 import time
 import uuid
-from typing import Optional, Any, List, Dict, Sequence
-from langchain_core.messages import BaseMessage, SystemMessage
+from typing import Literal, Optional, Any, List, Dict, Sequence
+from langchain_core.messages import BaseMessage, RemoveMessage
 
 import signal
 
-from langgraph.graph.state import StateNodeSpec
+from langgraph.graph import add_messages
+from langgraph.graph.message import Annotated, AnyMessage
+from langgraph.prebuilt.chat_agent_executor import AgentState
 from ra_aid.models_tokens import DEFAULT_TOKEN_LIMIT, models_tokens
 from ra_aid.agents.ciayn_agent import CiaynAgent
 import threading
@@ -75,20 +77,22 @@ def output_markdown_message(message: str) -> str:
     return "Message output."
 
 
-def trim_messages(
+def trim_messages_with_removal(
     messages: Sequence[BaseMessage], max_tokens: int
-) -> List[BaseMessage]:
-    """Helper function to trim messages to fit under token limit while preserving system message.
+) -> List[Dict[str, Any]]:
+    """Helper function to trim messages by generating removal operations.
 
     Args:
         messages: Sequence of messages to trim
         max_tokens: Maximum total tokens allowed
 
     Returns:
-        List of messages trimmed to fit under token limit
+        List of RemoveMessage operations for messages that should be removed
     """
     if not messages:
         return []
+
+    print(f"Total messages: {len(messages)}")
 
     estimate_tokens = CiaynAgent._estimate_tokens
 
@@ -99,15 +103,32 @@ def trim_messages(
     token_counts = [estimate_tokens(msg) for msg in remaining_msgs]
     total_tokens = initial_message_tokens + sum(token_counts)
 
+    print(f"total_tokens={total_tokens}")
+    max_tokens = 4000
+
     # Trim from the front until we fit under max_tokens
     start_idx = 0
     while total_tokens > max_tokens and start_idx < len(token_counts):
         total_tokens -= token_counts[start_idx]
         start_idx += 1
-        print(f"Trimmed {sum(token_counts[:start_idx])} tokens by removing messages 1-{start_idx} out of {len(remaining_msgs)} remaining messages")
 
-    # Keep initial message + whatever remains after trimming
-    return ([initial_message] if initial_message else []) + remaining_msgs[start_idx:]
+    if start_idx > 0:
+        print("=" * 60)
+        print("=" * 60)
+        print(
+            f"TRIMEED {sum(token_counts[:start_idx])} tokens by removing messages 1-{start_idx} out of {len(remaining_msgs)} remaining messages"
+        )
+        print("=" * 60)
+        print("=" * 60)
+
+    filtered_messages = []
+    filtered_messages.extend([RemoveMessage(id=msg.id) for msg in remaining_msgs[:start_idx]])
+    if initial_message:
+        filtered_messages.append(initial_message)
+    filtered_messages.extend(remaining_msgs[start_idx:])
+    
+    print(f"Generated {len(filtered_messages)} total messages ({start_idx} remove operations)")
+    return filtered_messages
 
 
 def limit_tokens(
@@ -131,11 +152,55 @@ def limit_tokens(
     if isinstance(state, dict):
         messages = state.get("messages", [])
         if not messages:
-            return state
+            return [
+                HumanMessage(
+                    "Your goal is to add as many files as possible, to try to reach maximum prompt context limit, we are testing your internal messages token limit functionality. If you want to edit a file, you can edit work/SUMMARY.md. Dont make any code changes, just do things that will keep accumulating files and prompt context, fill up any state you can as well."
+                )
+            ]
     else:
         messages = state
 
-    filtered_messages = trim_messages(messages, max_tokens)
+    delete_messages = trim_messages_with_removal(messages, max_tokens)
+    return {"messages": delete_messages}
+
+
+def limit_tokens_remove_style(
+    state: AgentState, max_tokens: int = DEFAULT_TOKEN_LIMIT
+) -> Dict[str, List[Dict[str, Any]]]:
+    """Limit total tokens in state messages while preserving the system message.
+
+    Takes either a LangGraph state list of messages or a dict with messages key and trims
+    older messages to stay under max_tokens, ensuring the system (initial) message is preserved.
+
+    Args:
+        state: List of messages (BaseMessage) or dict with 'messages' key.
+        max_tokens: Maximum total tokens allowed.
+
+    Returns:
+        Same type as input (List[BaseMessage] or dict) with messages trimmed to fit under token limit.
+    """
+    # if not state:
+    #     return state
+
+    if isinstance(state, dict):
+        messages = state.get("messages", [])
+        # print(f"state={state}")
+        if not messages:
+            print("NOT MESSAGES!")
+            return {
+                "message": [
+                    HumanMessage(
+                        "Your goal is to add as many files as possible, to try to reach maximum prompt context limit, we are testing your internal messages token limit functionality. If you want to edit a file, you can edit work/SUMMARY.md. Dont make any code changes, just do things that will keep accumulating files and prompt context, fill up any state you can as well."
+                    )
+                ]
+            }
+    else:
+        logger.warn("State is not dict")
+        messages = state
+
+    filtered_messages = trim_messages_with_removal(messages, max_tokens)
+    # filtered_messages = trim_messages(messages, max_tokens)
+    # state["messages"] = filtered_messages
 
     return filtered_messages
 
@@ -171,30 +236,118 @@ def get_model_token_limit() -> Optional[int]:
         return None
 
 
+def my_custom_add_messages(
+    left: List[Any],
+    right: List[Any],
+    *,
+    format: Optional[Literal["langchain-openai"]] = None,
+) -> List[Any]:
+    """
+    Similar to `add_messages`, but also handles messages whose `type='remove'`
+    by removing them, even if they are not actual `RemoveMessage` objects.
+    """
+
+    # 1) Convert to list if either side is not already a list
+    if not isinstance(left, list):
+        left = [left]  # type: ignore[assignment]
+    if not isinstance(right, list):
+        right = [right]  # type: ignore[assignment]
+
+    # 2) Convert each entry to a message if needed (pseudo-implementations)
+    #    Replace these stubs with whatever "convert_to_messages" does in your code.
+    def convert_to_messages(objs: List[Any]) -> List[Any]:
+        # < your actual convert_to_messages here >
+        return objs
+
+    def message_chunk_to_message(m: Any) -> Any:
+        # < your actual message_chunk_to_message here >
+        return m
+
+    left = [message_chunk_to_message(m) for m in convert_to_messages(left)]
+    right = [message_chunk_to_message(m) for m in convert_to_messages(right)]
+
+    # 3) Ensure each message has an ID
+    for m in left:
+        if not getattr(m, "id", None):
+            m.id = str(uuid.uuid4())
+    for m in right:
+        if not getattr(m, "id", None):
+            m.id = str(uuid.uuid4())
+
+    # 4) Merge logic
+    left_idx_by_id = {m.id: i for i, m in enumerate(left)}
+    merged = left.copy()
+    ids_to_remove = set()
+
+    for m in right:
+        # interpret "type='remove'" as instruction to remove
+        if getattr(m, "type", None) == "remove":
+            existing_idx = left_idx_by_id.get(m.id)
+            if existing_idx is not None:
+                ids_to_remove.add(m.id)
+            else:
+                # Decide whether to raise an error or just ignore
+                # If you prefer not to raise, comment this out
+                raise ValueError(
+                    f"Attempt to remove a message with an ID that doesn't exist: {m.id}"
+                )
+        else:
+            # If the ID already exists, we replace
+            existing_idx = left_idx_by_id.get(m.id)
+            if existing_idx is not None:
+                merged[existing_idx] = m
+            else:
+                # If ID not found, append
+                merged.append(m)
+
+    # Filter out any IDs we decided to remove
+    merged = [m for m in merged if m.id not in ids_to_remove]
+
+    # 5) Optional format step
+    # if format == "langchain-openai":
+    #     merged = _format_messages(merged)  # implement or import your method
+    # elif format:
+    #     msg = f"Unrecognized format: '{format}'. Expected one of 'langchain-openai', None."
+    #     raise ValueError(msg)
+
+    return merged
+
+class TokenLimitedState(AgentState):
+    # messages: Annotated[list[AnyMessage], add_messages]
+    messages: Annotated[list[AnyMessage], my_custom_add_messages]
+    # remaining_steps: RemainingSteps
+    # is_last_step: IsLastStep
+
+
 def build_agent_kwargs(
     checkpointer: Optional[Any] = None,
     config: Optional[Dict[str, Any]] = None,
     token_limit: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Build kwargs dictionary for agent creation.
-    
+
     Args:
         checkpointer: Optional memory checkpointer
         config: Optional configuration dictionary
         token_limit: Optional token limit for the model
-        
+
     Returns:
         Dictionary of kwargs for agent creation
     """
     agent_kwargs = {}
-    
+
     if checkpointer is not None:
         agent_kwargs["checkpointer"] = checkpointer
 
     if config is None or config.get("limit_tokens", True):
-        def state_modifier(state: Sequence[BaseMessage] | Dict[str, Any]) -> Sequence[BaseMessage]:
-            return limit_tokens(state, max_tokens=token_limit)
+
+        def state_modifier(
+            state: AgentState,
+        ) -> Dict[str, List[Dict[str, Any]]]:
+            return limit_tokens_remove_style(state, max_tokens=token_limit)
+
         agent_kwargs["state_modifier"] = state_modifier
+        agent_kwargs["state_schema"] = TokenLimitedState
 
     return agent_kwargs
 
@@ -233,7 +386,6 @@ def create_agent(
         if provider == "anthropic" and model_name and "claude" in model_name:
             logger.debug("Using create_react_agent to instantiate agent.")
             agent_kwargs = build_agent_kwargs(checkpointer, config, token_limit)
-            print(f"agent_kwargs={agent_kwargs}")
             return create_react_agent(model, tools, **agent_kwargs)
         else:
             logger.debug("Using CiaynAgent agent instance")
