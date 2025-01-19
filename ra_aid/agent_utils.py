@@ -193,7 +193,8 @@ def build_agent_kwargs(
         agent_kwargs["checkpointer"] = checkpointer
 
     if config is None or config.get("limit_tokens", True):
-        state_modifier = lambda state: limit_tokens(state, max_tokens=token_limit)
+        def state_modifier(state):
+            return limit_tokens(state, max_tokens=token_limit)
         agent_kwargs["state_modifier"] = state_modifier
 
     return agent_kwargs
