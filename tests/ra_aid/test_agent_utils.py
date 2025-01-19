@@ -174,7 +174,10 @@ def test_limit_tokens_none_messages():
 
 def test_create_agent_error_handling(mock_model, mock_memory):
     """Test create_agent error handling."""
-    mock_memory.get.side_effect = Exception("Memory error")
+    mock_memory.configure_mock(**{
+        "get.return_value": {},
+        "get_model_token_limit.side_effect": Exception("Memory error")
+    })
 
     with patch("ra_aid.agent_utils.create_react_agent") as mock_react:
         mock_react.return_value = "react_agent"
