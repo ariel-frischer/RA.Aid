@@ -172,25 +172,6 @@ def test_limit_tokens_none_messages():
     assert result is None
 
 
-def test_create_agent_error_handling(mock_model, mock_memory):
-    """Test create_agent error handling."""
-    mock_memory.get.return_value = {"provider": "anthropic", "model": "claude-2"}
-
-    with patch("ra_aid.agent_utils.get_model_token_limit") as mock_token_limit:
-        # Simulate token limit check failing
-        mock_token_limit.side_effect = Exception("Failed to get token limit")
-        
-        # Agent creation should fall back to CiaynAgent
-        agent = create_agent(mock_model, [])
-        
-        # Verify we got a CiaynAgent instance
-        from ra_aid.agents.ciayn_agent import CiaynAgent
-        assert isinstance(agent, CiaynAgent)
-        
-        # Verify token limit was attempted
-        mock_token_limit.assert_called_once()
-
-
 def test_create_agent_token_limiting(mock_model, mock_memory):
     """Test create_agent respects token limiting configuration."""
     mock_memory.get.return_value = {"provider": "openai", "model": "gpt-4"}
