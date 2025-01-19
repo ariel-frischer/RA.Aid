@@ -104,6 +104,7 @@ def trim_messages(
     while total_tokens > max_tokens and start_idx < len(token_counts):
         total_tokens -= token_counts[start_idx]
         start_idx += 1
+        print(f"Trimmed {sum(token_counts[:start_idx])} tokens by removing messages 1-{start_idx} out of {len(remaining_msgs)} remaining messages")
 
     # Keep initial message + whatever remains after trimming
     return ([initial_message] if initial_message else []) + remaining_msgs[start_idx:]
