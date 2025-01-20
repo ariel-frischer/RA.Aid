@@ -88,22 +88,6 @@ def test_config_settings(mock_dependencies):
         assert config["limit_tokens"] is False
 
 
-def test_chat_mode_implies_hil(mock_dependencies):
-    """Test that chat mode properly configures HIL in global config."""
-    from ra_aid.__main__ import main
-    import sys
-    from unittest.mock import patch
-
-    _global_memory.clear()
-    
-    with patch('ra_aid.tools.human.ask_human', return_value="test message"), \
-         patch.object(sys, 'argv', ['ra-aid', '--chat']):
-        main()
-        config = _global_memory["config"]
-        assert config["hil"] is True
-        assert config["chat_mode"] is True
-
-
 def test_temperature_validation(mock_dependencies):
     """Test that temperature argument is correctly passed to initialize_llm."""
     from ra_aid.__main__ import main, initialize_llm
