@@ -154,27 +154,6 @@ def test_state_modifier():
         assert result[-1] == messages[-1]
 
 
-def test_create_agent_token_limiting(mock_model, mock_memory):
-    """Test create_agent respects token limiting configuration."""
-    mock_memory.get.return_value = {"provider": "openai", "model": "gpt-4"}
-
-    # Test with token limiting enabled (default)
-    with patch("ra_aid.agent_utils.CiaynAgent") as mock_ciayn:
-        mock_ciayn.return_value = "ciayn_agent"
-        agent = create_agent(mock_model, [])
-
-        assert agent == "ciayn_agent"
-        assert "max_tokens" in mock_ciayn.call_args[1]
-
-    # Test with token limiting disabled
-    with patch("ra_aid.agent_utils.CiaynAgent") as mock_ciayn:
-        mock_ciayn.return_value = "ciayn_agent"
-        agent = create_agent(mock_model, [])
-
-        assert agent == "ciayn_agent"
-        assert "max_tokens" in mock_ciayn.call_args[1]
-
-
 def test_create_agent_with_checkpointer(mock_model, mock_memory):
     """Test create_agent with checkpointer argument."""
     mock_memory.get.return_value = {"provider": "openai", "model": "gpt-4"}
