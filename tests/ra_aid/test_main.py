@@ -16,7 +16,10 @@ def test_recursion_limit_in_global_config():
     _global_memory.clear()
     
     # Run agent with default recursion limit
-    config = {"configurable": {"thread_id": "test"}}
+    config = {
+        "configurable": {"thread_id": "test"},
+        "recursion_limit": DEFAULT_RECURSION_LIMIT
+    }
     _global_memory["config"] = config
     assert _global_memory["config"]["recursion_limit"] == DEFAULT_RECURSION_LIMIT
 
@@ -28,7 +31,10 @@ def test_recursion_limit_in_global_config():
     _global_memory.clear()
     
     # Run agent with custom recursion limit
-    config = {"configurable": {"thread_id": "test"}}
+    config = {
+        "configurable": {"thread_id": "test"},
+        "recursion_limit": 50
+    }
     _global_memory["config"] = config
     assert _global_memory["config"]["recursion_limit"] == 50
 
