@@ -105,19 +105,19 @@ def test_chat_mode_implies_hil(mock_dependencies):
 
 
 def test_temperature_validation(mock_dependencies):
-    """Test that temperature is correctly set in global config."""
-    from ra_aid.__main__ import main
+    """Test that temperature argument is correctly passed to initialize_llm."""
+    from ra_aid.__main__ import main, initialize_llm
     import sys
     from unittest.mock import patch
 
     _global_memory.clear()
     
-    with patch.object(sys, 'argv', ['ra-aid', '-m', 'test', '--temperature', '0.7']):
-        main()
-        assert _global_memory["config"]["temperature"] == 0.7
+    with patch('ra_aid.__main__.initialize_llm') as mock_init_llm:
+        with patch.object(sys, 'argv', ['ra-aid', '-m', 'test', '--temperature', '0.7']):
+            main()
+            mock_init_llm.assert_called_once()
+            assert mock_init_llm.call_args[2]['temperature'] == 0.7
 
-    _global_memory.clear()
-    
     with pytest.raises(SystemExit):
         with patch.object(sys, 'argv', ['ra-aid', '-m', 'test', '--temperature', '2.1']):
             main()
