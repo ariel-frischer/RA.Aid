@@ -228,7 +228,6 @@ def main():
         # Create the base model after validation
         model = initialize_llm(args.provider, args.model, temperature=args.temperature)
 
-        print(f"args.chat={args.chat}")
         # Handle chat mode
         if args.chat:
             if args.research_only:
