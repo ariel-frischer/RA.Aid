@@ -103,8 +103,6 @@ def state_modifier(
     Returns:
         list[BaseMessage]: Trimmed list of messages that fits within token limit
     """
-    length = len(state["messages"])
-    print(f"len(state[messages]): {length}")
     messages = state["messages"]
 
     if not messages:
@@ -123,20 +121,16 @@ def state_modifier(
         allow_partial=False,
     )
 
-    trimmed_messages = [first_message] + trimmed_remaining
-    print(f"len trimmed_messages={len(trimmed_messages)}")
-
-    return trimmed_messages
+    return [first_message] + trimmed_remaining
 
 
-def get_model_token_limit() -> Optional[int]:
+def get_model_token_limit(config: Dict[str, Any]) -> Optional[int]:
     """Get the token limit for the current model configuration.
 
     Returns:
         Optional[int]: The token limit if found, None otherwise
     """
     try:
-        config = _global_memory.get("config") or {}
         provider = config.get("provider", "")
         model_name = config.get("model", "")
 
@@ -179,9 +173,7 @@ def build_agent_kwargs(
     if checkpointer is not None:
         agent_kwargs["checkpointer"] = checkpointer
 
-    provider = config.get("provider", "")
-    model_name = config.get("model", "")
-    if config.get("limit_tokens", True) and is_anthropic_claude(provider, model_name):
+    if config.get("limit_tokens", True) and is_anthropic_claude(config):
 
         def wrapped_state_modifier(state: AgentState) -> list[BaseMessage]:
             return state_modifier(state, max_tokens=token_limit)
@@ -191,7 +183,7 @@ def build_agent_kwargs(
     return agent_kwargs
 
 
-def is_anthropic_claude(provider: str, model_name: str) -> bool:
+def is_anthropic_claude(config: Dict[str, Any]) -> bool:
     """Check if the provider and model name indicate an Anthropic Claude model.
 
     Args:
@@ -201,6 +193,8 @@ def is_anthropic_claude(provider: str, model_name: str) -> bool:
     Returns:
         bool: True if this is an Anthropic Claude model
     """
+    provider = config.get("provider", "")
+    model_name = config.get("model", "")
     return (
         provider.lower() == "anthropic"
         and model_name
@@ -234,12 +228,10 @@ def create_agent(
     """
     try:
         config = _global_memory.get("config", {})
-        provider = config.get("provider", "")
-        model_name = config.get("model", "")
-        token_limit = get_model_token_limit() or DEFAULT_TOKEN_LIMIT
+        token_limit = get_model_token_limit(config) or DEFAULT_TOKEN_LIMIT
 
         # Use REACT agent for Anthropic Claude models, otherwise use CIAYN
-        if is_anthropic_claude(provider, model_name):
+        if is_anthropic_claude(config):
             logger.debug("Using create_react_agent to instantiate agent.")
             agent_kwargs = build_agent_kwargs(checkpointer, config, token_limit)
             return create_react_agent(model, tools, **agent_kwargs)
@@ -251,7 +243,7 @@ def create_agent(
         # Default to REACT agent if provider/model detection fails
         logger.warning(f"Failed to detect model type: {e}. Defaulting to REACT agent.")
         config = _global_memory.get("config", {})
-        token_limit = get_model_token_limit()
+        token_limit = get_model_token_limit(config)
         agent_kwargs = build_agent_kwargs(checkpointer, config, token_limit)
         return create_react_agent(model, tools, **agent_kwargs)
 
