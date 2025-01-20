@@ -6,37 +6,45 @@ from ra_aid.tools.memory import _global_memory
 from ra_aid.config import DEFAULT_RECURSION_LIMIT
 
 
-def test_recursion_limit_in_global_config():
-    """Test that recursion limit is correctly set in global config."""
-    # Test default value
-    args = parse_arguments(["-m", "test message"])
-    assert args.recursion_limit == DEFAULT_RECURSION_LIMIT
+@pytest.fixture
+def mock_dependencies(monkeypatch):
+    """Mock all dependencies needed for main()."""
+    # Mock check_dependencies
+    monkeypatch.setattr('ra_aid.__main__.check_dependencies', lambda: None)
     
-    # Clear any existing config
-    _global_memory.clear()
+    # Mock validate_environment
+    monkeypatch.setattr('ra_aid.__main__.validate_environment', 
+                        lambda args: (True, [], True, []))
     
-    # Run agent with default recursion limit
-    config = {
-        "configurable": {"thread_id": "test"},
-        "recursion_limit": DEFAULT_RECURSION_LIMIT
-    }
-    _global_memory["config"] = config
-    assert _global_memory["config"]["recursion_limit"] == DEFAULT_RECURSION_LIMIT
+    # Mock initialize_llm
+    monkeypatch.setattr('ra_aid.__main__.initialize_llm', 
+                        lambda provider, model, temperature: None)
+    
+    # Mock run_research_agent
+    monkeypatch.setattr('ra_aid.__main__.run_research_agent', 
+                        lambda *args, **kwargs: None)
 
-    # Test custom value
-    args = parse_arguments(["-m", "test message", "--recursion-limit", "50"])
-    assert args.recursion_limit == 50
+def test_recursion_limit_in_global_config(mock_dependencies):
+    """Test that recursion limit is correctly set in global config."""
+    from ra_aid.__main__ import main
+    import sys
+    from unittest.mock import patch
     
     # Clear any existing config
     _global_memory.clear()
     
-    # Run agent with custom recursion limit
-    config = {
-        "configurable": {"thread_id": "test"},
-        "recursion_limit": 50
-    }
-    _global_memory["config"] = config
-    assert _global_memory["config"]["recursion_limit"] == 50
+    # Test default value
+    with patch.object(sys, 'argv', ['ra-aid', '-m', 'test message']):
+        main()
+        assert _global_memory["config"]["recursion_limit"] == DEFAULT_RECURSION_LIMIT
+    
+    # Clear config between tests
+    _global_memory.clear()
+    
+    # Test custom value
+    with patch.object(sys, 'argv', ['ra-aid', '-m', 'test message', '--recursion-limit', '50']):
+        main()
+        assert _global_memory["config"]["recursion_limit"] == 50
 
 
 def test_negative_recursion_limit():
