@@ -129,18 +129,9 @@ def mock_messages():
     ]
 
 
-def test_state_modifier():
+def test_state_modifier(mock_messages):
     """Test that state_modifier correctly trims messages while preserving the first message."""
-
-    messages = [
-        SystemMessage(content="System prompt"),
-        HumanMessage(content="Human message 1"),
-        AIMessage(content="AI response 1"),
-        HumanMessage(content="Human message 2"),
-        AIMessage(content="AI response 2"),
-    ]
-
-    state = AgentState(messages=messages)
+    state = AgentState(messages=mock_messages)
 
     with patch(
         "ra_aid.agents.ciayn_agent.CiaynAgent._estimate_tokens"
