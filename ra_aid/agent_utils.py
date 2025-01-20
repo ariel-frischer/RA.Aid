@@ -4,7 +4,7 @@ import sys
 import time
 import uuid
 from typing import Literal, Optional, Any, List, Dict, Sequence
-from langchain_core.messages import BaseMessage, RemoveMessage
+from langchain_core.messages import BaseMessage, RemoveMessage, trim_messages
 
 import signal
 
@@ -77,6 +77,22 @@ def output_markdown_message(message: str) -> str:
     return "Message output."
 
 
+def estimate_messages_tokens(messages: Sequence[BaseMessage]) -> int:
+    """Helper function to estimate total tokens in a sequence of messages.
+
+    Args:
+        messages: Sequence of messages to count tokens for
+
+    Returns:
+        Total estimated token count
+    """
+    if not messages:
+        return 0
+
+    estimate_tokens = CiaynAgent._estimate_tokens
+    return sum(estimate_tokens(msg) for msg in messages)
+
+
 def trim_messages_with_removal(
     messages: Sequence[BaseMessage], max_tokens: int
 ) -> List[Dict[str, Any]]:
@@ -94,14 +110,7 @@ def trim_messages_with_removal(
 
     print(f"Total messages: {len(messages)}")
 
-    estimate_tokens = CiaynAgent._estimate_tokens
-
-    initial_message = messages[0]
-    initial_message_tokens = estimate_tokens(initial_message) if initial_message else 0
-    remaining_msgs = messages[1:] if initial_message else messages
-
-    token_counts = [estimate_tokens(msg) for msg in remaining_msgs]
-    total_tokens = initial_message_tokens + sum(token_counts)
+    total_tokens = estimate_messages_tokens(messages)
 
     print(f"total_tokens={total_tokens}")
     max_tokens = 4000
@@ -122,12 +131,16 @@ def trim_messages_with_removal(
         print("=" * 60)
 
     filtered_messages = []
-    filtered_messages.extend([RemoveMessage(id=msg.id) for msg in remaining_msgs[:start_idx]])
+    filtered_messages.extend(
+        [RemoveMessage(id=msg.id) for msg in remaining_msgs[:start_idx]]
+    )
     if initial_message:
         filtered_messages.append(initial_message)
     filtered_messages.extend(remaining_msgs[start_idx:])
-    
-    print(f"Generated {len(filtered_messages)} total messages ({start_idx} remove operations)")
+
+    print(
+        f"Generated {len(filtered_messages)} total messages ({start_idx} remove operations)"
+    )
     return filtered_messages
 
 
@@ -203,6 +216,40 @@ def limit_tokens_remove_style(
     # state["messages"] = filtered_messages
 
     return filtered_messages
+
+
+def state_modifier(
+    state: AgentState, model: BaseChatModel, max_tokens: int = DEFAULT_TOKEN_LIMIT
+) -> list[BaseMessage]:
+    """Given the agent state, and max_tokens return a trimmed list of messages for the chat model."""
+
+    print(f"max_tokens={max_tokens}")
+    max_tokens = 12000
+    length = len(state["messages"])
+    print(f"len(state[messages]): {length}")
+    # tokens = model.get_num_tokens_from_messages(state["messages"])
+    tokens = estimate_messages_tokens(state["messages"])
+    print(f"tokens={tokens}")
+    messages = state["messages"]
+    print(f"messages={[(msg.id, msg.type) for msg in messages]}")
+
+    trimmed_messages = trim_messages(
+        state["messages"],
+        token_counter=estimate_messages_tokens,
+        max_tokens=max_tokens,
+        strategy="last",
+        allow_partial=False,
+    )
+    print(f"len trimmed_messages={len(trimmed_messages)}")
+
+    # trimmed_tokens = model.get_num_tokens_from_messages(trimmed_messages)
+    trimmed_tokens = estimate_messages_tokens(trimmed_messages)
+    print(f"trimmed_tokens={trimmed_tokens}")
+    print("TRIMMED:")
+    print(f"trimmed_messages={[msg.id for msg in trimmed_messages]}")
+    # print(trimmed_messages)
+
+    return trimmed_messages
 
 
 def get_model_token_limit() -> Optional[int]:
@@ -312,6 +359,7 @@ def my_custom_add_messages(
 
     return merged
 
+
 class TokenLimitedState(AgentState):
     # messages: Annotated[list[AnyMessage], add_messages]
     messages: Annotated[list[AnyMessage], my_custom_add_messages]
@@ -320,8 +368,9 @@ class TokenLimitedState(AgentState):
 
 
 def build_agent_kwargs(
+    model: BaseChatModel,
     checkpointer: Optional[Any] = None,
-    config: Optional[Dict[str, Any]] = None,
+    config: Dict[str, Any] = None,
     token_limit: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Build kwargs dictionary for agent creation.
@@ -339,15 +388,14 @@ def build_agent_kwargs(
     if checkpointer is not None:
         agent_kwargs["checkpointer"] = checkpointer
 
-    if config is None or config.get("limit_tokens", True):
+    provider = config.get("provider", "")
+    if config.get("limit_tokens", True) and provider.lower() == "anthropic":
 
-        def state_modifier(
-            state: AgentState,
-        ) -> Dict[str, List[Dict[str, Any]]]:
-            return limit_tokens_remove_style(state, max_tokens=token_limit)
+        def wrapped_state_modifier(state: AgentState) -> list[BaseMessage]:
+            return state_modifier(state, model, max_tokens=token_limit)
 
-        agent_kwargs["state_modifier"] = state_modifier
-        agent_kwargs["state_schema"] = TokenLimitedState
+        agent_kwargs["state_modifier"] = wrapped_state_modifier
+        # agent_kwargs["state_schema"] = TokenLimitedState
 
     return agent_kwargs
 
@@ -385,7 +433,10 @@ def create_agent(
         # Use REACT agent for Anthropic Claude models, otherwise use CIAYN
         if provider == "anthropic" and model_name and "claude" in model_name:
             logger.debug("Using create_react_agent to instantiate agent.")
-            agent_kwargs = build_agent_kwargs(checkpointer, config, token_limit)
+            agent_kwargs = build_agent_kwargs(model, checkpointer, config, token_limit)
+            # TODO: move to right before adding state modifier
+
+            # model.bind_tools(tools)
             return create_react_agent(model, tools, **agent_kwargs)
         else:
             logger.debug("Using CiaynAgent agent instance")
@@ -396,7 +447,7 @@ def create_agent(
         logger.warning(f"Failed to detect model type: {e}. Defaulting to REACT agent.")
         config = _global_memory.get("config", {})
         token_limit = get_model_token_limit()
-        agent_kwargs = build_agent_kwargs(checkpointer, config, token_limit)
+        agent_kwargs = build_agent_kwargs(model, checkpointer, config, token_limit)
         return create_react_agent(model, tools, **agent_kwargs)
 
 

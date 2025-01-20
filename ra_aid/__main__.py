@@ -14,7 +14,6 @@ from ra_aid.project_info import (
 from ra_aid.tools.memory import _global_memory
 from ra_aid.tools.human import ask_human
 from ra_aid import print_stage_header, print_error
-from ra_aid.tools.human import ask_human
 from ra_aid.__version__ import __version__
 from ra_aid.agent_utils import (
     AgentInterrupt,
@@ -229,6 +228,7 @@ def main():
         # Create the base model after validation
         model = initialize_llm(args.provider, args.model, temperature=args.temperature)
 
+        print(f"args.chat={args.chat}")
         # Handle chat mode
         if args.chat:
             if args.research_only:
