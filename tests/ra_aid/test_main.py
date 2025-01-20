@@ -96,7 +96,7 @@ def test_chat_mode_implies_hil(mock_dependencies):
 
     _global_memory.clear()
     
-    with patch('ra_aid.tools.human.ask_human.invoke', return_value="test message"), \
+    with patch('ra_aid.tools.human.ask_human', return_value="test message"), \
          patch.object(sys, 'argv', ['ra-aid', '--chat']):
         main()
         config = _global_memory["config"]
