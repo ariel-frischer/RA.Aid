@@ -28,33 +28,33 @@ def mock_memory():
 
 def test_get_model_token_limit_anthropic(mock_memory):
     """Test get_model_token_limit with Anthropic model."""
-    mock_memory.get.return_value = {"provider": "anthropic", "model": "claude2"}
+    config = {"provider": "anthropic", "model": "claude2"}
 
-    token_limit = get_model_token_limit()
+    token_limit = get_model_token_limit(config)
     assert token_limit == models_tokens["anthropic"]["claude2"]
 
 
 def test_get_model_token_limit_openai(mock_memory):
     """Test get_model_token_limit with OpenAI model."""
-    mock_memory.get.return_value = {"provider": "openai", "model": "gpt-4"}
+    config = {"provider": "openai", "model": "gpt-4"}
 
-    token_limit = get_model_token_limit()
+    token_limit = get_model_token_limit(config)
     assert token_limit == models_tokens["openai"]["gpt-4"]
 
 
 def test_get_model_token_limit_unknown(mock_memory):
     """Test get_model_token_limit with unknown provider/model."""
-    mock_memory.get.return_value = {"provider": "unknown", "model": "unknown-model"}
+    config = {"provider": "unknown", "model": "unknown-model"}
 
-    token_limit = get_model_token_limit()
+    token_limit = get_model_token_limit(config)
     assert token_limit is None
 
 
 def test_get_model_token_limit_missing_config(mock_memory):
     """Test get_model_token_limit with missing configuration."""
-    mock_memory.get.return_value = {}
+    config = {}
 
-    token_limit = get_model_token_limit()
+    token_limit = get_model_token_limit(config)
     assert token_limit is None
 
 
