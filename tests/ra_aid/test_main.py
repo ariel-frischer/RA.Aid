@@ -96,7 +96,7 @@ def test_chat_mode_implies_hil(mock_dependencies):
 
     _global_memory.clear()
     
-    with patch('ra_aid.tools.human.ask_human', return_value="test message"), \
+    with patch('ra_aid.tools.human.ask_human.invoke', return_value="test message"), \
          patch.object(sys, 'argv', ['ra-aid', '--chat']):
         main()
         config = _global_memory["config"]
@@ -116,7 +116,7 @@ def test_temperature_validation(mock_dependencies):
         with patch.object(sys, 'argv', ['ra-aid', '-m', 'test', '--temperature', '0.7']):
             main()
             mock_init_llm.assert_called_once()
-            assert mock_init_llm.call_args[2]['temperature'] == 0.7
+            assert mock_init_llm.call_args.kwargs['temperature'] == 0.7
 
     with pytest.raises(SystemExit):
         with patch.object(sys, 'argv', ['ra-aid', '-m', 'test', '--temperature', '2.1']):
