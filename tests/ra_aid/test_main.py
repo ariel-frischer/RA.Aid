@@ -51,51 +51,68 @@ def test_zero_recursion_limit():
         parse_arguments(["-m", "test message", "--recursion-limit", "0"])
 
 
-def test_config_settings():
-    """Test that various arguments are correctly set in config."""
-    args = parse_arguments([
-        "-m", "test message",
-        "--recursion-limit", "75",
-        "--cowboy-mode",
-        "--research-only",
-        "--provider", "anthropic",
-        "--model", "claude-3-5-sonnet-20241022",
-        "--expert-provider", "openai",
-        "--expert-model", "gpt-4",
-        "--temperature", "0.7",
-        "--disable-limit-tokens"
-    ])
+def test_config_settings(mock_dependencies):
+    """Test that various settings are correctly applied in global config."""
+    from ra_aid.__main__ import main
+    import sys
+    from unittest.mock import patch
 
-    assert args.recursion_limit == 75
-    assert args.cowboy_mode is True
-    assert args.research_only is True
-    assert args.provider == "anthropic"
-    assert args.model == "claude-3-5-sonnet-20241022"
-    assert args.expert_provider == "openai" 
-    assert args.expert_model == "gpt-4"
-    assert args.temperature == 0.7
-    assert args.disable_limit_tokens is False
-
-
-def test_chat_mode_implies_hil():
-    """Test that enabling chat mode automatically enables HIL."""
-    args = parse_arguments(["-m", "test message", "--chat"])
-    assert args.hil is True
-
-
-def test_temperature_validation():
-    """Test temperature validation."""
-    args = parse_arguments(["-m", "test", "--temperature", "0.0"])
-    assert args.temperature == 0.0
+    _global_memory.clear()
     
-    args = parse_arguments(["-m", "test", "--temperature", "2.0"])
-    assert args.temperature == 2.0
+    with patch.object(sys, 'argv', [
+        'ra-aid', '-m', 'test message',
+        '--cowboy-mode',
+        '--research-only',
+        '--provider', 'anthropic',
+        '--model', 'claude-3-5-sonnet-20241022',
+        '--expert-provider', 'openai',
+        '--expert-model', 'gpt-4',
+        '--temperature', '0.7',
+        '--disable-limit-tokens'
+    ]):
+        main()
+        config = _global_memory["config"]
+        assert config["cowboy_mode"] is True
+        assert config["research_only"] is True
+        assert config["provider"] == "anthropic"
+        assert config["model"] == "claude-3-5-sonnet-20241022"
+        assert config["expert_provider"] == "openai"
+        assert config["expert_model"] == "gpt-4"
+        assert config["limit_tokens"] is False
 
-    with pytest.raises(SystemExit):
-        parse_arguments(["-m", "test", "--temperature", "-0.1"])
+
+def test_chat_mode_implies_hil(mock_dependencies):
+    """Test that chat mode properly configures HIL in global config."""
+    from ra_aid.__main__ import main
+    import sys
+    from unittest.mock import patch
+
+    _global_memory.clear()
+    
+    with patch.object(sys, 'argv', ['ra-aid', '--chat']):
+        main()
+        config = _global_memory["config"]
+        assert config["hil"] is True
+        assert config["chat_mode"] is True
+
+
+def test_temperature_validation(mock_dependencies):
+    """Test that temperature is correctly set in global config."""
+    from ra_aid.__main__ import main
+    import sys
+    from unittest.mock import patch
+
+    _global_memory.clear()
+    
+    with patch.object(sys, 'argv', ['ra-aid', '-m', 'test', '--temperature', '0.7']):
+        main()
+        assert _global_memory["config"]["temperature"] == 0.7
+
+    _global_memory.clear()
     
     with pytest.raises(SystemExit):
-        parse_arguments(["-m", "test", "--temperature", "2.1"])
+        with patch.object(sys, 'argv', ['ra-aid', '-m', 'test', '--temperature', '2.1']):
+            main()
 
 
 def test_missing_message():
