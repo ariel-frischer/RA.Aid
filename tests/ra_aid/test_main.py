@@ -6,16 +6,31 @@ from ra_aid.tools.memory import _global_memory
 from ra_aid.config import DEFAULT_RECURSION_LIMIT
 
 
-def test_default_recursion_limit():
-    """Test that default recursion limit is set correctly."""
+def test_recursion_limit_in_global_config():
+    """Test that recursion limit is correctly set in global config."""
+    # Test default value
     args = parse_arguments(["-m", "test message"])
     assert args.recursion_limit == DEFAULT_RECURSION_LIMIT
+    
+    # Clear any existing config
+    _global_memory.clear()
+    
+    # Run agent with default recursion limit
+    config = {"configurable": {"thread_id": "test"}}
+    _global_memory["config"] = config
+    assert _global_memory["config"]["recursion_limit"] == DEFAULT_RECURSION_LIMIT
 
-
-def test_custom_recursion_limit():
-    """Test that custom recursion limit is set correctly."""
+    # Test custom value
     args = parse_arguments(["-m", "test message", "--recursion-limit", "50"])
     assert args.recursion_limit == 50
+    
+    # Clear any existing config
+    _global_memory.clear()
+    
+    # Run agent with custom recursion limit
+    config = {"configurable": {"thread_id": "test"}}
+    _global_memory["config"] = config
+    assert _global_memory["config"]["recursion_limit"] == 50
 
 
 def test_negative_recursion_limit():
