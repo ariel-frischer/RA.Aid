@@ -37,7 +37,6 @@ def test_config_settings():
         "--recursion-limit", "75",
         "--cowboy-mode",
         "--research-only",
-        "--web-research",
         "--provider", "anthropic",
         "--model", "claude-3-5-sonnet-20241022",
         "--expert-provider", "openai",
@@ -83,4 +82,4 @@ def test_temperature_validation():
 def test_missing_message():
     """Test that missing message argument raises error."""
     with pytest.raises(SystemExit):
-        parse_arguments([])
+        parse_arguments(["--provider", "openai"])  # Any args without -m should fail
