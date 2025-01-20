@@ -172,6 +172,7 @@ ra-aid -m "Add new feature" --verbose
 - `--expert-model`: Specify the model name for the expert tool (defaults to o1 for OpenAI)
 - `--chat`: Enable chat mode for interactive assistance
 - `--verbose`: Enable detailed logging output for debugging and monitoring
+- `--recursion-limit`: Maximum recursion depth for task execution (default: 100)
 
 ### Example Tasks
 
