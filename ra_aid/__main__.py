@@ -119,7 +119,7 @@ Examples:
     parser.add_argument(
         "--disable-limit-tokens",
         action="store_false",
-        help="Whether to disable token limiting to agent state messages",
+        help="Whether to disable token limiting for Anthropic Claude agents. Token limiter removes older messages to prevent maximum token limit API errors.",
     )
 
     if args is None:

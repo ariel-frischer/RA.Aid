@@ -1,12 +1,13 @@
 """Unit tests for agent_utils.py."""
 
-from langchain_core.messages import SystemMessage
-from ra_aid.models_tokens import DEFAULT_TOKEN_LIMIT
 import pytest
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from ra_aid.models_tokens import DEFAULT_TOKEN_LIMIT
+from ra_aid.agent_utils import state_modifier, AgentState
 from unittest.mock import Mock, patch
 from langchain_core.language_models import BaseChatModel
 
-from ra_aid.agent_utils import create_agent, get_model_token_limit, limit_tokens
+from ra_aid.agent_utils import create_agent, get_model_token_limit
 from ra_aid.models_tokens import models_tokens
 
 
@@ -118,7 +119,6 @@ def test_create_agent_missing_config(mock_model, mock_memory):
 @pytest.fixture
 def mock_messages():
     """Fixture providing mock message objects."""
-    from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
     return [
         SystemMessage(content="System prompt"),
@@ -129,47 +129,29 @@ def mock_messages():
     ]
 
 
-def test_limit_tokens_basic(mock_messages):
-    """Test basic token limiting functionality."""
+def test_state_modifier():
+    """Test that state_modifier correctly trims messages while preserving the first message."""
+
+    messages = [
+        SystemMessage(content="System prompt"),
+        HumanMessage(content="Human message 1"),
+        AIMessage(content="AI response 1"),
+        HumanMessage(content="Human message 2"),
+        AIMessage(content="AI response 2"),
+    ]
+
+    state = AgentState(messages=messages)
+
     with patch(
         "ra_aid.agents.ciayn_agent.CiaynAgent._estimate_tokens"
     ) as mock_estimate:
-        # Set up mock to return fixed token counts
         mock_estimate.side_effect = lambda msg: 100 if msg else 0
 
-        result = limit_tokens(mock_messages, max_tokens=250)
+        result = state_modifier(state, max_tokens=250)
 
-        # Should preserve system message and most recent messages
-        assert len(result) < len(mock_messages)
+        assert len(result) < len(messages)
         assert isinstance(result[0], SystemMessage)
-        assert result[-1] == mock_messages[-1]
-
-
-def test_limit_tokens_preserves_system(mock_messages):
-    """Test that system message is always preserved."""
-    with patch(
-        "ra_aid.agents.ciayn_agent.CiaynAgent._estimate_tokens"
-    ) as mock_estimate:
-        mock_estimate.return_value = 1000  # Force aggressive trimming
-
-        result = limit_tokens(mock_messages, max_tokens=100)
-
-        # System message should always be first and preserved
-        assert len(result) >= 1
-        assert isinstance(result[0], SystemMessage)
-        assert result[0].content == "System prompt"
-
-
-def test_limit_tokens_empty_messages():
-    """Test handling of empty message list."""
-    result = limit_tokens([], max_tokens=1000)
-    assert result == []
-
-
-def test_limit_tokens_none_messages():
-    """Test handling of None messages."""
-    result = limit_tokens(None, max_tokens=1000)
-    assert result is None
+        assert result[-1] == messages[-1]
 
 
 def test_create_agent_token_limiting(mock_model, mock_memory):
