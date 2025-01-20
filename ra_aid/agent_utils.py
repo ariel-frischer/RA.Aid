@@ -50,7 +50,7 @@ from ra_aid.prompts import (
     HUMAN_PROMPT_SECTION_PLANNING,
     WEB_RESEARCH_PROMPT,
 )
-from langgraph.checkpoint.memory import MemorySaver
+from langchain_checkpoint.memory import MemorySaver
 
 from langchain_core.messages import HumanMessage
 from anthropic import APIError, APITimeoutError, RateLimitError, InternalServerError
@@ -227,27 +227,37 @@ def state_modifier(
     max_tokens = 12000
     length = len(state["messages"])
     print(f"len(state[messages]): {length}")
-    # tokens = model.get_num_tokens_from_messages(state["messages"])
     tokens = estimate_messages_tokens(state["messages"])
     print(f"tokens={tokens}")
     messages = state["messages"]
     print(f"messages={[(msg.id, msg.type) for msg in messages]}")
 
-    trimmed_messages = trim_messages(
-        state["messages"],
+    if not messages:
+        return []
+
+    # Extract first message and calculate its token count
+    first_message = messages[0]
+    remaining_messages = messages[1:]
+    first_tokens = estimate_messages_tokens([first_message])
+    new_max_tokens = max_tokens - first_tokens
+
+    # Trim remaining messages with adjusted max_tokens
+    trimmed_remaining = trim_messages(
+        remaining_messages,
         token_counter=estimate_messages_tokens,
-        max_tokens=max_tokens,
+        max_tokens=new_max_tokens,
         strategy="last",
         allow_partial=False,
     )
-    print(f"len trimmed_messages={len(trimmed_messages)}")
 
-    # trimmed_tokens = model.get_num_tokens_from_messages(trimmed_messages)
+    # Combine first message with trimmed remaining
+    trimmed_messages = [first_message] + trimmed_remaining
+
+    print(f"len trimmed_messages={len(trimmed_messages)}")
     trimmed_tokens = estimate_messages_tokens(trimmed_messages)
     print(f"trimmed_tokens={trimmed_tokens}")
     print("TRIMMED:")
     print(f"trimmed_messages={[msg.id for msg in trimmed_messages]}")
-    # print(trimmed_messages)
 
     return trimmed_messages
 
