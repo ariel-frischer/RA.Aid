@@ -137,11 +137,11 @@ def get_model_token_limit() -> Optional[int]:
     """
     try:
         config = _global_memory.get("config") or {}
-        provider = config.get("provider")
-        model_name = config.get("model")
+        provider = config.get("provider", "")
+        model_name = config.get("model", "")
 
         token_limit = None
-        if provider and model_name:
+        if is_anthropic_claude(provider, model_name):
             provider_tokens = models_tokens.get(provider, {})
             token_limit = provider_tokens.get(model_name)
             if token_limit:
