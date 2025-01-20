@@ -134,17 +134,14 @@ def get_model_token_limit(config: Dict[str, Any]) -> Optional[int]:
         provider = config.get("provider", "")
         model_name = config.get("model", "")
 
-        token_limit = None
-
         provider_tokens = models_tokens.get(provider, {})
-        token_limit = provider_tokens.get(model_name)
+        token_limit = provider_tokens.get(model_name, None)
         if token_limit:
             logger.debug(
                 f"Found token limit for {provider}/{model_name}: {token_limit}"
             )
         else:
             logger.debug(f"Could not find token limit for {provider}/{model_name}")
-            token_limit = None
 
         return token_limit
 
