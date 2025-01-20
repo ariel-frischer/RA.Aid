@@ -130,7 +130,7 @@ def mock_messages():
 
 
 def test_state_modifier(mock_messages):
-    """Test that state_modifier correctly trims messages while preserving the first message."""
+    """Test that state_modifier correctly trims recent messages while preserving the first message when total tokens > max_tokens."""
     state = AgentState(messages=mock_messages)
 
     with patch(
@@ -140,9 +140,9 @@ def test_state_modifier(mock_messages):
 
         result = state_modifier(state, max_tokens=250)
 
-        assert len(result) < len(messages)
+        assert len(result) < len(mock_messages)
         assert isinstance(result[0], SystemMessage)
-        assert result[-1] == messages[-1]
+        assert result[-1] == mock_messages[-1]
 
 
 def test_create_agent_with_checkpointer(mock_model, mock_memory):
