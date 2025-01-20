@@ -191,6 +191,19 @@ def build_agent_kwargs(
     return agent_kwargs
 
 
+def is_anthropic_claude(provider: str, model_name: str) -> bool:
+    """Check if the provider and model name indicate an Anthropic Claude model.
+    
+    Args:
+        provider: The provider name
+        model_name: The model name
+        
+    Returns:
+        bool: True if this is an Anthropic Claude model
+    """
+    return provider.lower() == "anthropic" and model_name and "claude" in model_name.lower()
+
+
 def create_agent(
     model: BaseChatModel,
     tools: List[Any],
