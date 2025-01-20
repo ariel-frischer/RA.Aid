@@ -95,11 +95,11 @@ def state_modifier(
     state: AgentState, max_tokens: int = DEFAULT_TOKEN_LIMIT
 ) -> list[BaseMessage]:
     """Given the agent state and max_tokens, return a trimmed list of messages.
-    
+
     Args:
         state: The current agent state containing messages
         max_tokens: Maximum number of tokens to allow (default: DEFAULT_TOKEN_LIMIT)
-        
+
     Returns:
         list[BaseMessage]: Trimmed list of messages that fits within token limit
     """
@@ -141,16 +141,16 @@ def get_model_token_limit() -> Optional[int]:
         model_name = config.get("model", "")
 
         token_limit = None
-        if is_anthropic_claude(provider, model_name):
-            provider_tokens = models_tokens.get(provider, {})
-            token_limit = provider_tokens.get(model_name)
-            if token_limit:
-                logger.debug(
-                    f"Found token limit for {provider}/{model_name}: {token_limit}"
-                )
-            else:
-                logger.debug(f"Could not find token limit for {provider}/{model_name}")
-                token_limit = None
+
+        provider_tokens = models_tokens.get(provider, {})
+        token_limit = provider_tokens.get(model_name)
+        if token_limit:
+            logger.debug(
+                f"Found token limit for {provider}/{model_name}: {token_limit}"
+            )
+        else:
+            logger.debug(f"Could not find token limit for {provider}/{model_name}")
+            token_limit = None
 
         return token_limit
 
@@ -160,7 +160,6 @@ def get_model_token_limit() -> Optional[int]:
 
 
 def build_agent_kwargs(
-    model: BaseChatModel,
     checkpointer: Optional[Any] = None,
     config: Dict[str, Any] = None,
     token_limit: Optional[int] = None,
@@ -181,7 +180,8 @@ def build_agent_kwargs(
         agent_kwargs["checkpointer"] = checkpointer
 
     provider = config.get("provider", "")
-    if config.get("limit_tokens", True) and provider.lower() == "anthropic":
+    model_name = config.get("model", "")
+    if config.get("limit_tokens", True) and is_anthropic_claude(provider, model_name):
 
         def wrapped_state_modifier(state: AgentState) -> list[BaseMessage]:
             return state_modifier(state, max_tokens=token_limit)
@@ -193,15 +193,19 @@ def build_agent_kwargs(
 
 def is_anthropic_claude(provider: str, model_name: str) -> bool:
     """Check if the provider and model name indicate an Anthropic Claude model.
-    
+
     Args:
         provider: The provider name
         model_name: The model name
-        
+
     Returns:
         bool: True if this is an Anthropic Claude model
     """
-    return provider.lower() == "anthropic" and model_name and "claude" in model_name.lower()
+    return (
+        provider.lower() == "anthropic"
+        and model_name
+        and "claude" in model_name.lower()
+    )
 
 
 def create_agent(
@@ -230,14 +234,14 @@ def create_agent(
     """
     try:
         config = _global_memory.get("config", {})
-        provider = config.get("provider")
-        model_name = config.get("model")
+        provider = config.get("provider", "")
+        model_name = config.get("model", "")
         token_limit = get_model_token_limit() or DEFAULT_TOKEN_LIMIT
 
         # Use REACT agent for Anthropic Claude models, otherwise use CIAYN
-        if provider == "anthropic" and model_name and "claude" in model_name:
+        if is_anthropic_claude(provider, model_name):
             logger.debug("Using create_react_agent to instantiate agent.")
-            agent_kwargs = build_agent_kwargs(model, checkpointer, config, token_limit)
+            agent_kwargs = build_agent_kwargs(checkpointer, config, token_limit)
             return create_react_agent(model, tools, **agent_kwargs)
         else:
             logger.debug("Using CiaynAgent agent instance")
@@ -248,7 +252,7 @@ def create_agent(
         logger.warning(f"Failed to detect model type: {e}. Defaulting to REACT agent.")
         config = _global_memory.get("config", {})
         token_limit = get_model_token_limit()
-        agent_kwargs = build_agent_kwargs(model, checkpointer, config, token_limit)
+        agent_kwargs = build_agent_kwargs(checkpointer, config, token_limit)
         return create_react_agent(model, tools, **agent_kwargs)
 
 
