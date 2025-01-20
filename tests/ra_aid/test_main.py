@@ -81,5 +81,10 @@ def test_temperature_validation():
 
 def test_missing_message():
     """Test that missing message argument raises error."""
-    with pytest.raises(SystemExit):
-        parse_arguments(["--provider", "openai"])  # Any args without -m should fail
+    with pytest.raises(SystemExit) as exc_info:
+        parse_arguments([])  # Empty args should fail
+    assert exc_info.value.code == 2  # Standard argparse exit code
+
+    with pytest.raises(SystemExit) as exc_info:
+        parse_arguments(["--provider", "openai"])  # Args without -m should fail
+    assert exc_info.value.code == 2
