@@ -20,6 +20,15 @@ def mock_dependencies(monkeypatch):
     monkeypatch.setattr('ra_aid.__main__.run_research_agent', 
                         lambda *args, **kwargs: None)
 
+    def mock_config_update(*args, **kwargs):
+        config = _global_memory.get("config", {})
+        if "temperature" in kwargs:
+            config["temperature"] = kwargs["temperature"]
+        _global_memory["config"] = config
+
+    monkeypatch.setattr('ra_aid.__main__.initialize_llm', 
+                        mock_config_update)
+
 def test_recursion_limit_in_global_config(mock_dependencies):
     """Test that recursion limit is correctly set in global config."""
     from ra_aid.__main__ import main
@@ -89,7 +98,8 @@ def test_chat_mode_implies_hil(mock_dependencies):
 
     _global_memory.clear()
     
-    with patch.object(sys, 'argv', ['ra-aid', '--chat']):
+    with patch('ra_aid.tools.human.ask_human.invoke', return_value="test message"), \
+         patch.object(sys, 'argv', ['ra-aid', '--chat']):
         main()
         config = _global_memory["config"]
         assert config["hil"] is True
