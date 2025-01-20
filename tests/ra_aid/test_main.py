@@ -9,18 +9,14 @@ from ra_aid.config import DEFAULT_RECURSION_LIMIT
 @pytest.fixture
 def mock_dependencies(monkeypatch):
     """Mock all dependencies needed for main()."""
-    # Mock check_dependencies
     monkeypatch.setattr('ra_aid.__main__.check_dependencies', lambda: None)
     
-    # Mock validate_environment
     monkeypatch.setattr('ra_aid.__main__.validate_environment', 
                         lambda args: (True, [], True, []))
     
-    # Mock initialize_llm
     monkeypatch.setattr('ra_aid.__main__.initialize_llm', 
                         lambda provider, model, temperature: None)
     
-    # Mock run_research_agent
     monkeypatch.setattr('ra_aid.__main__.run_research_agent', 
                         lambda *args, **kwargs: None)
 
@@ -30,18 +26,14 @@ def test_recursion_limit_in_global_config(mock_dependencies):
     import sys
     from unittest.mock import patch
     
-    # Clear any existing config
     _global_memory.clear()
     
-    # Test default value
     with patch.object(sys, 'argv', ['ra-aid', '-m', 'test message']):
         main()
         assert _global_memory["config"]["recursion_limit"] == DEFAULT_RECURSION_LIMIT
     
-    # Clear config between tests
     _global_memory.clear()
     
-    # Test custom value
     with patch.object(sys, 'argv', ['ra-aid', '-m', 'test message', '--recursion-limit', '50']):
         main()
         assert _global_memory["config"]["recursion_limit"] == 50
@@ -93,14 +85,12 @@ def test_chat_mode_implies_hil():
 
 def test_temperature_validation():
     """Test temperature validation."""
-    # Valid temperatures
     args = parse_arguments(["-m", "test", "--temperature", "0.0"])
     assert args.temperature == 0.0
     
     args = parse_arguments(["-m", "test", "--temperature", "2.0"])
     assert args.temperature == 2.0
 
-    # Invalid temperatures
     with pytest.raises(SystemExit):
         parse_arguments(["-m", "test", "--temperature", "-0.1"])
     
