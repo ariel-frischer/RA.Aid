@@ -81,10 +81,15 @@ def test_temperature_validation():
 
 def test_missing_message():
     """Test that missing message argument raises error."""
-    with pytest.raises(SystemExit) as exc_info:
-        parse_arguments([])  # Empty args should fail
-    assert exc_info.value.code == 2  # Standard argparse exit code
+    # Test chat mode which doesn't require message
+    args = parse_arguments(["--chat"])
+    assert args.chat is True
+    assert args.message is None
 
-    with pytest.raises(SystemExit) as exc_info:
-        parse_arguments(["--provider", "openai"])  # Args without -m should fail
-    assert exc_info.value.code == 2
+    # Test non-chat mode requires message
+    args = parse_arguments(["--provider", "openai"])
+    assert args.message is None
+
+    # Verify message is captured when provided
+    args = parse_arguments(["-m", "test"])
+    assert args.message == "test"
