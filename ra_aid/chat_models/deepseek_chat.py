@@ -21,6 +21,44 @@ class ChatDeepseekReasoner(ChatOpenAI):
 
         return params
 
+    def _generate(
+        self,
+        messages: List[BaseMessage],
+        stop: Optional[List[str]] = None,
+        run_manager: Optional[CallbackManagerForLLMRun] = None,
+        **kwargs: Any,
+    ) -> ChatResult:
+        """Override _generate to ensure message alternation."""
+        # Print original messages for debugging
+        print("\n[Message Debug] Original messages:")
+        for i, msg in enumerate(messages):
+            role = "user" if isinstance(msg, HumanMessage) else "assistant"
+            print(f"Message {i}: {role} - {msg.content[:100]}...")
+
+        # Process messages to ensure alternation
+        processed = []
+        prev_role = None
+        
+        for msg in messages:
+            current_role = "user" if isinstance(msg, HumanMessage) else "assistant"
+            
+            if prev_role == current_role:
+                # Merge consecutive same-role messages
+                if processed:
+                    processed[-1].content += f"\n\n{msg.content}"
+            else:
+                processed.append(msg)
+                prev_role = current_role
+
+        # Print processed messages for debugging
+        print("\n[Message Debug] Processed messages:")
+        for i, msg in enumerate(processed):
+            role = "user" if isinstance(msg, HumanMessage) else "assistant"
+            print(f"Message {i}: {role} - {msg.content[:100]}...")
+
+        # Call parent implementation with processed messages
+        return super()._generate(processed, stop=stop, run_manager=run_manager, **kwargs)
+
     async def acompletion_with_retry(self, *args, **kwargs) -> Any:
         response = await super().acompletion_with_retry(*args, **kwargs)
         if response.choices:
