@@ -43,6 +43,14 @@ def initialize_llm(provider: str, model_name: str, temperature: float | None = N
             model=model_name,
             **({"temperature": temperature} if temperature is not None else {})
         )
+    elif provider == "deepseek":
+        print("initialize_llm with DEEPSEEK")
+        return ChatOpenAI(
+            api_key=os.getenv("DEEPSEEK_API_KEY"),
+            base_url="https://api.deepseek.com",
+            temperature=temperature if temperature is not None else 1,
+            model=model_name,
+        )
     elif provider == "openai-compatible":
         return ChatOpenAI(
             api_key=os.getenv("OPENAI_API_KEY"),
