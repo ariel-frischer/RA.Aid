@@ -39,7 +39,7 @@ def initialize_llm(provider: str, model_name: str, temperature: float | None = N
         )
     elif provider == "openrouter":
         # Use specialized class for DeepSeek R1/reasoner models through OpenRouter
-        if model_name.startswith("deepseek/") and ("r1" in model_name.lower() or "reasoner" in model_name.lower()):
+        if model_name.startswith("deepseek/") and "r1" in model_name.lower():
             print('using custom ChatDeepseekReasoner via OpenRouter')
             return ChatDeepseekReasoner(
                 api_key=os.getenv("OPENROUTER_API_KEY"),
