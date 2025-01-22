@@ -117,6 +117,16 @@ def initialize_expert_llm(provider: str = "openai", model_name: str = "o1") -> B
             model_name=model_name,
         )
     elif provider == "openrouter":
+        # Use specialized class for DeepSeek R1/reasoner models through OpenRouter
+        if model_name.startswith("deepseek/") and ("r1" in model_name.lower() or "reasoner" in model_name.lower()):
+            print('using custom ChatDeepseekReasoner via OpenRouter for expert model')
+            return ChatDeepseekReasoner(
+                api_key=os.getenv("EXPERT_OPENROUTER_API_KEY"),
+                base_url="https://openrouter.ai/api/v1",
+                temperature=0,  # Expert models use deterministic output
+                model=model_name,
+            )
+        # Default OpenRouter handling
         return ChatOpenAI(
             api_key=os.getenv("EXPERT_OPENROUTER_API_KEY"),
             base_url="https://openrouter.ai/api/v1",
