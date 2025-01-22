@@ -9,7 +9,13 @@ from dataclasses import dataclass
 from ra_aid.agents.ciayn_agent import CiaynAgent
 
 from ra_aid.env import validate_environment
-from ra_aid.llm import initialize_llm, initialize_expert_llm
+from ra_aid.llm import (
+    initialize_llm,
+    initialize_expert_llm,
+    get_env_var,
+    get_provider_config,
+    create_llm_client
+)
 
 @pytest.fixture
 def clean_env(monkeypatch):
