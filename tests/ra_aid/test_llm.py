@@ -372,3 +372,122 @@ def mock_gemini():
     with patch('ra_aid.llm.ChatGoogleGenerativeAI') as mock:
         mock.return_value = Mock(spec=ChatGoogleGenerativeAI)
         yield mock
+
+@pytest.fixture
+def mock_deepseek_reasoner():
+    """Mock ChatDeepseekReasoner for testing DeepSeek provider initialization."""
+    with patch('ra_aid.llm.ChatDeepseekReasoner') as mock:
+        mock.return_value = Mock()
+        yield mock
+
+def test_initialize_deepseek(clean_env, mock_openai, mock_deepseek_reasoner, monkeypatch):
+    """Test DeepSeek provider initialization with different models."""
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+    
+    # Test with reasoner model
+    model = initialize_llm("deepseek", "deepseek-reasoner")
+    mock_deepseek_reasoner.assert_called_with(
+        api_key="test-key",
+        base_url="https://api.deepseek.com",
+        temperature=1,
+        model="deepseek-reasoner"
+    )
+    
+    # Test with non-reasoner model
+    model = initialize_llm("deepseek", "deepseek-chat")
+    mock_openai.assert_called_with(
+        api_key="test-key",
+        base_url="https://api.deepseek.com",
+        temperature=1,
+        model="deepseek-chat"
+    )
+
+def test_initialize_expert_deepseek(clean_env, mock_openai, mock_deepseek_reasoner, monkeypatch):
+    """Test expert DeepSeek provider initialization."""
+    monkeypatch.setenv("EXPERT_DEEPSEEK_API_KEY", "test-key")
+    
+    # Test with reasoner model
+    model = initialize_expert_llm("deepseek", "deepseek-reasoner")
+    mock_deepseek_reasoner.assert_called_with(
+        api_key="test-key",
+        base_url="https://api.deepseek.com",
+        temperature=0,
+        model="deepseek-reasoner"
+    )
+    
+    # Test with non-reasoner model
+    model = initialize_expert_llm("deepseek", "deepseek-chat")
+    mock_openai.assert_called_with(
+        api_key="test-key",
+        base_url="https://api.deepseek.com",
+        temperature=0,
+        model="deepseek-chat"
+    )
+
+def test_initialize_openrouter_deepseek(clean_env, mock_openai, mock_deepseek_reasoner, monkeypatch):
+    """Test OpenRouter DeepSeek model initialization."""
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    
+    # Test with DeepSeek R1 model
+    model = initialize_llm("openrouter", "deepseek/deepseek-r1")
+    mock_deepseek_reasoner.assert_called_with(
+        api_key="test-key",
+        base_url="https://openrouter.ai/api/v1",
+        temperature=1,
+        model="deepseek/deepseek-r1"
+    )
+    
+    # Test with non-DeepSeek model
+    model = initialize_llm("openrouter", "mistral/mistral-large")
+    mock_openai.assert_called_with(
+        api_key="test-key",
+        base_url="https://openrouter.ai/api/v1",
+        model="mistral/mistral-large"
+    )
+
+def test_initialize_expert_openrouter_deepseek(clean_env, mock_openai, mock_deepseek_reasoner, monkeypatch):
+    """Test expert OpenRouter DeepSeek model initialization."""
+    monkeypatch.setenv("EXPERT_OPENROUTER_API_KEY", "test-key")
+    
+    # Test with DeepSeek R1 model
+    model = initialize_expert_llm("openrouter", "deepseek/deepseek-r1")
+    mock_deepseek_reasoner.assert_called_with(
+        api_key="test-key",
+        base_url="https://openrouter.ai/api/v1",
+        temperature=0,
+        model="deepseek/deepseek-r1"
+    )
+    
+    # Test with non-DeepSeek model
+    model = initialize_expert_llm("openrouter", "mistral/mistral-large")
+    mock_openai.assert_called_with(
+        api_key="test-key",
+        base_url="https://openrouter.ai/api/v1",
+        model="mistral/mistral-large"
+    )
+
+def test_deepseek_environment_fallback(clean_env, mock_deepseek_reasoner, monkeypatch):
+    """Test DeepSeek environment variable fallback behavior."""
+    # Set only base API key
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "base-key")
+    
+    # Initialize expert mode - should use base key
+    model = initialize_expert_llm("deepseek", "deepseek-reasoner")
+    mock_deepseek_reasoner.assert_called_with(
+        api_key="base-key",
+        base_url="https://api.deepseek.com",
+        temperature=0,
+        model="deepseek-reasoner"
+    )
+    
+    # Set expert API key
+    monkeypatch.setenv("EXPERT_DEEPSEEK_API_KEY", "expert-key")
+    
+    # Initialize again - should use expert key
+    model = initialize_expert_llm("deepseek", "deepseek-reasoner")
+    mock_deepseek_reasoner.assert_called_with(
+        api_key="expert-key",
+        base_url="https://api.deepseek.com",
+        temperature=0,
+        model="deepseek-reasoner"
+    )
