@@ -38,8 +38,8 @@ def initialize_llm(provider: str, model_name: str, temperature: float | None = N
             **({"temperature": temperature} if temperature is not None else {})
         )
     elif provider == "openrouter":
-        # Use specialized class for DeepSeek R1/reasoner models through OpenRouter
-        if model_name.startswith("deepseek/") and "r1" in model_name.lower():
+        # Use specialized class for DeepSeek R1 model through OpenRouter
+        if model_name.startswith("deepseek/") and "deepseek-r1" in model_name.lower():
             print('using custom ChatDeepseekReasoner via OpenRouter')
             return ChatDeepseekReasoner(
                 api_key=os.getenv("OPENROUTER_API_KEY"),
@@ -56,8 +56,8 @@ def initialize_llm(provider: str, model_name: str, temperature: float | None = N
         )
     elif provider == "deepseek":
         
-        # Use specialized class for R1/reasoner models
-        if "r1" in model_name.lower() or "reasoner" in model_name.lower():
+        # Use specialized class for DeepSeek Reasoner model
+        if model_name.lower() == "deepseek-reasoner":
             print('using custom ChatDeepseekReasoner')
             return ChatDeepseekReasoner(
                 api_key=os.getenv("DEEPSEEK_API_KEY"),
@@ -118,7 +118,7 @@ def initialize_expert_llm(provider: str = "openai", model_name: str = "o1") -> B
         )
     elif provider == "openrouter":
         # Use specialized class for DeepSeek R1/reasoner models through OpenRouter
-        if model_name.startswith("deepseek/") and ("r1" in model_name.lower() or "reasoner" in model_name.lower()):
+        if model_name.startswith("deepseek/") and "deepseek-r1" in model_name.lower():
             print('using custom ChatDeepseekReasoner via OpenRouter for expert model')
             return ChatDeepseekReasoner(
                 api_key=os.getenv("EXPERT_OPENROUTER_API_KEY"),
@@ -145,7 +145,7 @@ def initialize_expert_llm(provider: str = "openai", model_name: str = "o1") -> B
         )
     elif provider == "deepseek":
         # Use specialized class for R1/reasoner models
-        if "r1" in model_name.lower() or "reasoner" in model_name.lower():
+        if model_name.lower() == "deepseek-reasoner":
             print('using custom ChatDeepseekReasoner for expert model')
             return ChatDeepseekReasoner(
                 api_key=os.getenv("EXPERT_DEEPSEEK_API_KEY"),
