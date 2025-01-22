@@ -123,13 +123,15 @@ Examples:
         help="Whether to disable token limiting for Anthropic Claude react agents. Token limiter removes older messages to prevent maximum token limit API errors.",
     )
     parser.add_argument(
-        "--aider-config", type=str, help="Specify the aider config file path"
-    )
-    parser.add_argument(
         "--recursion-limit",
         type=int,
         default=DEFAULT_RECURSION_LIMIT,
         help="Maximum recursion depth for agent operations (default: 100)",
+    )
+    parser.add_argument(
+        '--aider-config',
+        type=str,
+        help='Specify the aider config file path'
     )
 
     if args is None:
