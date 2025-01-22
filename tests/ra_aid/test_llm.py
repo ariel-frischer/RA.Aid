@@ -323,21 +323,33 @@ def test_initialize_llm_cross_provider(clean_env, mock_openai, mock_anthropic, m
         model="gemini-2.0-flash-thinking-exp-1219"
     )
 
+@dataclass
+class Args:
+    """Test arguments class."""
+    provider: str
+    expert_provider: str
+    model: str = None
+    expert_model: str = None
+
 def test_environment_variable_precedence(clean_env, mock_openai, monkeypatch):
     """Test environment variable precedence and fallback."""
-    # Test get_env_var helper
+    # Test get_env_var helper with fallback
     monkeypatch.setenv("TEST_KEY", "base-value")
     monkeypatch.setenv("EXPERT_TEST_KEY", "expert-value")
     
     assert get_env_var("TEST_KEY") == "base-value"
     assert get_env_var("TEST_KEY", expert=True) == "expert-value"
     
+    # Test fallback when expert value not set
+    monkeypatch.delenv("EXPERT_TEST_KEY", raising=False)
+    assert get_env_var("TEST_KEY", expert=True) == "base-value"
+    
     # Test provider config
+    monkeypatch.setenv("EXPERT_OPENAI_API_KEY", "expert-key")
     config = get_provider_config("openai", is_expert=True)
-    assert config["api_key"] == get_env_var("OPENAI_API_KEY", expert=True)
+    assert config["api_key"] == "expert-key"
     
     # Test LLM client creation with expert mode
-    monkeypatch.setenv("EXPERT_OPENAI_API_KEY", "expert-key")
     llm = create_llm_client("openai", "o1", is_expert=True)
     mock_openai.assert_called_with(
         api_key="expert-key",
@@ -345,14 +357,15 @@ def test_environment_variable_precedence(clean_env, mock_openai, monkeypatch):
         temperature=0
     )
     
-    # Test empty key validation
+    # Test environment validation
     monkeypatch.setenv("EXPERT_OPENAI_API_KEY", "")
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)  # Remove fallback
-    monkeypatch.delenv("TAVILY_API_KEY", raising=False)  # Remove web research
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "anthropic-key")  # Add for provider validation
-    monkeypatch.setenv("GEMINI_API_KEY", "gemini-key")  # Add for provider validation
-    monkeypatch.setenv("ANTHROPIC_MODEL", "claude-3-haiku-20240307")  # Add model for provider validation
-    args = Args(provider="anthropic", expert_provider="openai")  # Change base provider to avoid validation error
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "anthropic-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-key")
+    monkeypatch.setenv("ANTHROPIC_MODEL", "claude-3-haiku-20240307")
+    
+    args = Args(provider="anthropic", expert_provider="openai")
     expert_enabled, expert_missing, web_enabled, web_missing = validate_environment(args)
     assert not expert_enabled
     assert expert_missing

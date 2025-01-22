@@ -7,9 +7,15 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from ra_aid.chat_models.deepseek_chat import ChatDeepseekReasoner
 
 def get_env_var(name: str, expert: bool = False) -> Optional[str]:
-    """Get environment variable with optional expert prefix."""
+    """Get environment variable with optional expert prefix and fallback."""
     prefix = "EXPERT_" if expert else ""
-    return os.getenv(f"{prefix}{name}")
+    value = os.getenv(f"{prefix}{name}")
+    
+    # If expert mode and no expert value, fall back to base value
+    if expert and not value:
+        value = os.getenv(name)
+        
+    return value
 
 def create_deepseek_client(
     model_name: str,
