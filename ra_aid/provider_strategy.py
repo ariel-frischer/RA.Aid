@@ -246,7 +246,6 @@ class DeepSeekStrategy(ProviderStrategy):
         """Validate DeepSeek environment variables."""
         missing = []
 
-        # Check if we're validating expert config
         if args and hasattr(args, 'expert_provider') and args.expert_provider == 'deepseek':
             key = os.environ.get('EXPERT_DEEPSEEK_API_KEY')
             if not key or key == '':
