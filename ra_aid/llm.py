@@ -3,6 +3,7 @@ from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
 from langchain_core.language_models import BaseChatModel
 from langchain_google_genai import ChatGoogleGenerativeAI
+from ra_aid.chat_models.deepseek_chat import ChatDeepseekReasoner
 
 
 
@@ -44,10 +45,10 @@ def initialize_llm(provider: str, model_name: str, temperature: float | None = N
             **({"temperature": temperature} if temperature is not None else {})
         )
     elif provider == "deepseek":
-        from ra_aid.chat_models.deepseek_chat import ChatDeepseekReasoner
         
         # Use specialized class for R1/reasoner models
         if "r1" in model_name.lower() or "reasoner" in model_name.lower():
+            print('using custom ChatDeepseekReasoner')
             return ChatDeepseekReasoner(
                 api_key=os.getenv("DEEPSEEK_API_KEY"),
                 base_url="https://api.deepseek.com",
