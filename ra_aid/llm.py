@@ -133,5 +133,23 @@ def initialize_expert_llm(provider: str = "openai", model_name: str = "o1") -> B
             api_key=os.getenv("EXPERT_GEMINI_API_KEY"),
             model=model_name,
         )
+    elif provider == "deepseek":
+        # Use specialized class for R1/reasoner models
+        if "r1" in model_name.lower() or "reasoner" in model_name.lower():
+            print('using custom ChatDeepseekReasoner for expert model')
+            return ChatDeepseekReasoner(
+                api_key=os.getenv("EXPERT_DEEPSEEK_API_KEY"),
+                base_url="https://api.deepseek.com",
+                temperature=0,  # Expert models use deterministic output
+                model=model_name,
+            )
+            
+        # Fallback to standard ChatOpenAI for other DeepSeek models
+        return ChatOpenAI(
+            api_key=os.getenv("EXPERT_DEEPSEEK_API_KEY"),
+            base_url="https://api.deepseek.com",
+            temperature=0,  # Expert models use deterministic output
+            model=model_name,
+        )
     else:
         raise ValueError(f"Unsupported provider: {provider}")
