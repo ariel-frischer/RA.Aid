@@ -166,6 +166,42 @@ def test_different_providers_no_expert_key(clean_env, monkeypatch):
     assert not web_research_enabled
     assert 'TAVILY_API_KEY environment variable is not set' in web_research_missing
 
+def test_environment_validation_research_provider(clean_env, monkeypatch):
+    """Test environment validation with research-specific provider configuration."""
+    monkeypatch.setenv('ANTHROPIC_API_KEY', 'test-key')
+    monkeypatch.setenv('OPENAI_API_KEY', 'test-key')
+    
+    args = MockArgs(
+        provider="anthropic",
+        research_provider="openai",
+        model="claude-3-haiku-20240307",
+        research_model="gpt-4"
+    )
+    
+    expert_enabled, expert_missing, web_enabled, web_missing = validate_environment(args)
+    assert not expert_missing
+    assert args.research_provider == "openai"
+    assert args.research_model == "gpt-4"
+    assert os.environ.get("OPENAI_API_KEY") == "test-key"
+
+def test_environment_validation_planner_provider(clean_env, monkeypatch):
+    """Test environment validation with planner-specific provider configuration."""
+    monkeypatch.setenv('ANTHROPIC_API_KEY', 'test-key')
+    monkeypatch.setenv('OPENAI_API_KEY', 'test-key')
+    
+    args = MockArgs(
+        provider="anthropic",
+        planner_provider="openai",
+        model="claude-3-haiku-20240307",
+        planner_model="gpt-4"
+    )
+    
+    expert_enabled, expert_missing, web_enabled, web_missing = validate_environment(args)
+    assert not expert_missing
+    assert args.planner_provider == "openai"
+    assert args.planner_model == "gpt-4"
+    assert os.environ.get("OPENAI_API_KEY") == "test-key"
+
 def test_mixed_provider_openai_compatible(clean_env, monkeypatch):
     """Test behavior with openai-compatible expert and different main provider"""
     args = MockArgs(provider="anthropic", expert_provider="openai-compatible", model="claude-3-haiku-20240307")

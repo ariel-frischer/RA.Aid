@@ -5,6 +5,9 @@ from langchain_anthropic import ChatAnthropic
 from langchain_core.language_models import BaseChatModel
 from langchain_google_genai import ChatGoogleGenerativeAI
 from ra_aid.chat_models.deepseek_chat import ChatDeepseekReasoner
+from ra_aid.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 def get_env_var(name: str, expert: bool = False) -> Optional[str]:
@@ -121,6 +124,14 @@ def create_llm_client(
     config = get_provider_config(provider, is_expert)
     if not config:
         raise ValueError(f"Unsupported provider: {provider}")
+
+    logger.debug(
+        "Creating LLM client with provider=%s, model=%s, temperature=%s, expert=%s",
+        provider,
+        model_name,
+        temperature,
+        is_expert
+    )
 
     # Handle temperature for expert mode
     if is_expert:

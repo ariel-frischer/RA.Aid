@@ -23,6 +23,10 @@ class MockArgs:
     expert_provider: Optional[str] = None
     model: Optional[str] = None
     expert_model: Optional[str] = None
+    research_provider: Optional[str] = None
+    research_model: Optional[str] = None
+    planner_provider: Optional[str] = None
+    planner_model: Optional[str] = None
 
 @pytest.fixture
 def clean_env():
@@ -224,6 +228,40 @@ def test_incomplete_expert_config(clean_env):
     assert len(expert_missing) == 1
     assert "EXPERT_OPENAI_API_BASE" in expert_missing[0]
 
+
+def test_research_provider_resolution(clean_env):
+    """Test research provider configuration resolution logic."""
+    os.environ["ANTHROPIC_API_KEY"] = "test-key"
+    os.environ["OPENAI_API_KEY"] = "test-key"
+    
+    args = MockArgs(
+        provider="anthropic",
+        research_provider="openai",
+        research_model="gpt-4"
+    )
+    
+    expert_enabled, expert_missing, web_enabled, web_missing = validate_environment(args)
+    assert expert_enabled  # Should fall back to main provider
+    assert not web_enabled
+    assert args.research_provider == "openai"
+    assert args.research_model == "gpt-4"
+
+def test_planner_provider_resolution(clean_env):
+    """Test planner provider configuration resolution logic."""
+    os.environ["ANTHROPIC_API_KEY"] = "test-key"
+    os.environ["OPENAI_API_KEY"] = "test-key"
+    
+    args = MockArgs(
+        provider="anthropic",
+        planner_provider="openai",
+        planner_model="gpt-4"
+    )
+    
+    expert_enabled, expert_missing, web_enabled, web_missing = validate_environment(args)
+    assert expert_enabled  # Should fall back to main provider
+    assert not web_enabled
+    assert args.planner_provider == "openai"
+    assert args.planner_model == "gpt-4"
 
 def test_empty_environment_variables(clean_env):
     """Test handling of empty environment variables."""
