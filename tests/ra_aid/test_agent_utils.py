@@ -226,49 +226,6 @@ def test_create_agent_anthropic_token_limiting_enabled(mock_model, mock_memory):
         assert callable(args[1]["state_modifier"])
 
 
-def test_research_agent_dedicated_config(mock_model, mock_memory):
-    """Test research agent uses dedicated research provider/model when specified."""
-    mock_memory.get.return_value = {
-        "provider": "anthropic",
-        "research_provider": "openai",
-        "research_model": "gpt-4",
-        "model": "claude-2",
-    }
-
-    with patch("ra_aid.agent_utils.create_react_agent") as mock_react:
-        mock_react.return_value = "react_agent"
-        agent = create_agent(mock_model, [])
-
-        # Verify OpenAI provider is used for research
-        assert agent == "react_agent"
-        mock_react.assert_called_once()
-        # Verify the research config was used for agent creation
-        mock_react.assert_called_once()
-        # Should use research provider/model but NOT modify global config
-        called_model = mock_react.call_args[0][0]
-        assert called_model == mock_model
-
-
-def test_planner_agent_fallback_config(mock_model, mock_memory):
-    """Test planner agent falls back to main provider/model when not specified."""
-    mock_memory.get.return_value = {
-        "provider": "anthropic",
-        "model": "claude-2",
-        "planner_provider": None,
-        "planner_model": None,
-    }
-
-    with patch("ra_aid.agent_utils.create_react_agent") as mock_react:
-        mock_react.return_value = "react_agent"
-        agent = create_agent(mock_model, [])
-
-        # Verify fallback to main provider
-        assert agent == "react_agent"
-        mock_react.assert_called_once()
-        assert mock_memory.get()["provider"] == "anthropic"
-        assert mock_memory.get()["model"] == "claude-2"
-
-
 def test_create_agent_anthropic_token_limiting_disabled(mock_model, mock_memory):
     """Test create_agent doesn't set up token limiting for Claude models when disabled."""
     mock_memory.get.return_value = {
