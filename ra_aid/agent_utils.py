@@ -142,12 +142,18 @@ def get_model_token_limit(config: Dict[str, Any]) -> Optional[int]:
             model_info = get_model_info(provider_model)
             max_input_tokens = model_info.get("max_input_tokens")
             if max_input_tokens:
-                logger.debug(f"Using litellm token limit for {model_name}: {max_input_tokens}")
+                logger.debug(
+                    f"Using litellm token limit for {model_name}: {max_input_tokens}"
+                )
                 return max_input_tokens
         except litellm.exceptions.NotFoundError:
-            logger.debug(f"Model {model_name} not found in litellm, falling back to models_tokens")
+            logger.debug(
+                f"Model {model_name} not found in litellm, falling back to models_tokens"
+            )
         except Exception as e:
-            logger.debug(f"Error getting model info from litellm: {e}, falling back to models_tokens")
+            logger.debug(
+                f"Error getting model info from litellm: {e}, falling back to models_tokens"
+            )
 
         # Fallback to models_tokens dict
         # Normalize model name for fallback lookup (e.g. claude-2 -> claude2)
@@ -155,7 +161,9 @@ def get_model_token_limit(config: Dict[str, Any]) -> Optional[int]:
         provider_tokens = models_tokens.get(provider, {})
         max_input_tokens = provider_tokens.get(normalized_name, None)
         if max_input_tokens:
-            logger.debug(f"Found token limit for {provider}/{model_name}: {max_input_tokens}")
+            logger.debug(
+                f"Found token limit for {provider}/{model_name}: {max_input_tokens}"
+            )
         else:
             logger.debug(f"Could not find token limit for {provider}/{model_name}")
 
@@ -194,28 +202,6 @@ def build_agent_kwargs(
         agent_kwargs["state_modifier"] = wrapped_state_modifier
 
     return agent_kwargs
-
-
-def get_effective_model_config(config: dict, provider_override_key: str = None, model_override_key: str = None) -> dict:
-    """Get effective provider and model, using override values if available.
-    
-    Args:
-        config: Base config dictionary containing provider/model 
-        provider_override_key: Key for provider override (e.g. "research_provider")
-        model_override_key: Key for model override (e.g. "research_model")
-        
-    Returns:
-        Dict containing effective provider and model
-    """
-    effective_config = {}
-    # Get provider with override priority, falling back to base config if override is None
-    effective_config["provider"] = config.get(provider_override_key) if provider_override_key else None
-    effective_config["provider"] = effective_config["provider"] or config.get("provider")
-    
-    # Get model with override priority, falling back to base config if override is None
-    effective_config["model"] = config.get(model_override_key) if model_override_key else None
-    effective_config["model"] = effective_config["model"] or config.get("model")
-    return effective_config
 
 
 def is_anthropic_claude(config: Dict[str, Any]) -> bool:
@@ -380,20 +366,14 @@ def run_research_agent(
         project_info=formatted_project_info,
     )
 
-    # Create a copy of the config to avoid modifying the original
-    effective_config = (config.copy() if config else _global_memory.get("config", {})).copy()
-    # Use research-specific config if available, otherwise fall back to defaults
-    effective_config.update(
-        get_effective_model_config(
-            effective_config,
-            provider_override_key="research_provider",
-            model_override_key="research_model"
-        )
-    )
-
-    recursion_limit = effective_config.get("recursion_limit", DEFAULT_RECURSION_LIMIT)
-    run_config = {"configurable": {"thread_id": thread_id}, "recursion_limit": recursion_limit}
-    run_config.update(effective_config)
+    config = _global_memory.get("config", {}) if not config else config
+    recursion_limit = config.get("recursion_limit", DEFAULT_RECURSION_LIMIT)
+    run_config = {
+        "configurable": {"thread_id": thread_id},
+        "recursion_limit": recursion_limit,
+    }
+    if config:
+        run_config.update(config)
 
     try:
         if console_message:
@@ -498,13 +478,12 @@ def run_web_research_agent(
     )
 
     config = _global_memory.get("config", {}) if not config else config
-    
-    # Use override values if available  
-    effective_config = get_effective_model_config(config, "research_provider", "research_model")
-    config.update(effective_config)
 
     recursion_limit = config.get("recursion_limit", DEFAULT_RECURSION_LIMIT)
-    run_config = {"configurable": {"thread_id": thread_id}, "recursion_limit": recursion_limit}
+    run_config = {
+        "configurable": {"thread_id": thread_id},
+        "recursion_limit": recursion_limit,
+    }
     if config:
         run_config.update(config)
 
@@ -588,16 +567,11 @@ def run_planning_agent(
 
     config = _global_memory.get("config", {}) if not config else config
 
-    # Use override values if available
-    effective_config = get_effective_model_config(
-        config,
-        provider_override_key="planner_provider",
-        model_override_key="planner_model"
-    )
-    config.update(effective_config)
-
     recursion_limit = config.get("recursion_limit", DEFAULT_RECURSION_LIMIT)
-    run_config = {"configurable": {"thread_id": thread_id}, "recursion_limit": recursion_limit}
+    run_config = {
+        "configurable": {"thread_id": thread_id},
+        "recursion_limit": recursion_limit,
+    }
     if config:
         run_config.update(config)
 
@@ -687,7 +661,10 @@ def run_task_implementation_agent(
 
     config = _global_memory.get("config", {}) if not config else config
     recursion_limit = config.get("recursion_limit", DEFAULT_RECURSION_LIMIT)
-    run_config = {"configurable": {"thread_id": thread_id}, "recursion_limit": recursion_limit}
+    run_config = {
+        "configurable": {"thread_id": thread_id},
+        "recursion_limit": recursion_limit,
+    }
     if config:
         run_config.update(config)
 

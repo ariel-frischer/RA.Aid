@@ -11,6 +11,10 @@ class MockArgs:
     expert_provider: str
     model: Optional[str] = None
     expert_model: Optional[str] = None
+    research_provider: Optional[str] = None
+    research_model: Optional[str] = None
+    planner_provider: Optional[str] = None
+    planner_model: Optional[str] = None
 
 @pytest.fixture
 def clean_env(monkeypatch):
@@ -173,6 +177,7 @@ def test_environment_validation_research_provider(clean_env, monkeypatch):
     
     args = MockArgs(
         provider="anthropic",
+        expert_provider="openai",
         research_provider="openai",
         model="claude-3-haiku-20240307",
         research_model="gpt-4"
@@ -191,6 +196,7 @@ def test_environment_validation_planner_provider(clean_env, monkeypatch):
     
     args = MockArgs(
         provider="anthropic",
+        expert_provider="openai",
         planner_provider="openai",
         model="claude-3-haiku-20240307",
         planner_model="gpt-4"

@@ -9,7 +9,6 @@ from ra_aid.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-
 def get_env_var(name: str, expert: bool = False) -> Optional[str]:
     """Get environment variable with optional expert prefix and fallback."""
     prefix = "EXPERT_" if expert else ""

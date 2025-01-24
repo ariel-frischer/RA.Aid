@@ -233,11 +233,14 @@ def test_research_provider_resolution(clean_env):
     """Test research provider configuration resolution logic."""
     os.environ["ANTHROPIC_API_KEY"] = "test-key"
     os.environ["OPENAI_API_KEY"] = "test-key"
+    os.environ["ANTHROPIC_MODEL"] = "claude-3-haiku-20240307"
     
     args = MockArgs(
         provider="anthropic",
+        expert_provider="openai",
         research_provider="openai",
-        research_model="gpt-4"
+        research_model="gpt-4",
+        model="claude-3-haiku-20240307"
     )
     
     expert_enabled, expert_missing, web_enabled, web_missing = validate_environment(args)
@@ -253,8 +256,10 @@ def test_planner_provider_resolution(clean_env):
     
     args = MockArgs(
         provider="anthropic",
+        expert_provider="openai",
         planner_provider="openai",
-        planner_model="gpt-4"
+        planner_model="gpt-4",
+        model="claude-3-haiku-20240307"
     )
     
     expert_enabled, expert_missing, web_enabled, web_missing = validate_environment(args)

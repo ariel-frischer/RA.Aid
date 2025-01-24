@@ -7,7 +7,7 @@ from langchain_core.language_models import BaseChatModel
 import litellm
 
 from ra_aid.models_tokens import DEFAULT_TOKEN_LIMIT
-from ra_aid.agent_utils import state_modifier, AgentState, get_effective_model_config
+from ra_aid.agent_utils import state_modifier, AgentState
 
 from ra_aid.agent_utils import create_agent, get_model_token_limit
 from ra_aid.models_tokens import models_tokens
@@ -59,81 +59,6 @@ def test_get_model_token_limit_missing_config(mock_memory):
     token_limit = get_model_token_limit(config)
     assert token_limit is None
 
-
-@pytest.fixture
-def base_config():
-    """Base configuration for effective model config tests."""
-    return {
-        "provider": "anthropic",
-        "model": "claude-2",
-        "research_provider": "openai",
-        "research_model": "gpt-4",
-        "planner_provider": "openrouter",
-        "expert_model": "claude-3",
-    }
-
-
-def test_full_config_overrides(base_config):
-    """Test when both provider and model overrides are provided."""
-    result = get_effective_model_config(
-        base_config,
-        provider_override_key="research_provider",
-        model_override_key="research_model",
-    )
-    assert result["provider"] == "openai"
-    assert result["model"] == "gpt-4"
-
-
-def test_no_overrides_uses_base_values(base_config):
-    """Test when no overrides are provided - should use base config."""
-    result = get_effective_model_config(base_config)
-    assert result["provider"] == "anthropic"
-    assert result["model"] == "claude-2"
-
-
-def test_provider_override_only(base_config):
-    """Test when only provider override is specified."""
-    result = get_effective_model_config(
-        base_config, provider_override_key="planner_provider"
-    )
-    assert result["provider"] == "openrouter"
-    assert result["model"] == "claude-2"  # Falls back to base model
-
-
-def test_model_override_only(base_config):
-    """Test when only model override is specified."""
-    result = get_effective_model_config(base_config, model_override_key="expert_model")
-    assert result["provider"] == "anthropic"  # Base provider
-    assert result["model"] == "claude-3"
-
-
-def test_null_overrides_fallback_to_base(base_config):
-    """Test when override keys exist but have null values."""
-    # Set override keys to None
-    base_config["research_provider"] = None
-    base_config["research_model"] = None
-
-    result = get_effective_model_config(
-        base_config,
-        provider_override_key="research_provider",
-        model_override_key="research_model",
-    )
-    assert result["provider"] == "anthropic"
-    assert result["model"] == "claude-2"
-
-
-def test_get_effective_model_config_missing_base():
-    """Test when base config is missing provider/model but has overrides."""
-    config = {"research_provider": "openai", "research_model": "gpt-4"}
-
-    result = get_effective_model_config(
-        config,
-        provider_override_key="research_provider",
-        model_override_key="research_model",
-    )
-
-    assert result["provider"] == "openai"
-    assert result["model"] == "gpt-4"
 
 
 def test_get_model_token_limit_litellm_success():
