@@ -163,3 +163,49 @@ def test_planner_model_provider_args(mock_dependencies):
         config = _global_memory["config"]
         assert config["planner_provider"] == "openai"
         assert config["planner_model"] == "gpt-4"
+
+
+def test_test_command_args(mock_dependencies):
+    """Test that test command arguments are properly parsed."""
+    from ra_aid.__main__ import main
+    import sys
+    from unittest.mock import patch
+
+    _global_memory.clear()
+    
+    with patch.object(sys, 'argv', [
+        'ra-aid', '-m', 'test message',
+        '--test-cmd', 'pytest tests/',
+        '--auto-test'
+    ]):
+        main()
+        config = _global_memory["config"]
+        assert config["test_cmd"] == "pytest tests/"
+        assert config["auto_test"] is True
+
+
+def test_test_command_defaults(mock_dependencies):
+    """Test default values for test command arguments."""
+    from ra_aid.__main__ import main
+    import sys
+    from unittest.mock import patch
+
+    _global_memory.clear()
+    
+    with patch.object(sys, 'argv', ['ra-aid', '-m', 'test message']):
+        main()
+        config = _global_memory["config"]
+        assert "test_cmd" not in config
+        assert config.get("auto_test", False) is False
+
+
+def test_test_command_validation():
+    """Test validation of test command format."""
+    args = parse_arguments(["-m", "test", "--test-cmd", "pytest tests/"])
+    assert args.test_cmd == "pytest tests/"
+
+    args = parse_arguments(["-m", "test", "--test-cmd", "python -m pytest"])
+    assert args.test_cmd == "python -m pytest"
+
+    args = parse_arguments(["-m", "test", "--test-cmd", "npm test"])
+    assert args.test_cmd == "npm test"

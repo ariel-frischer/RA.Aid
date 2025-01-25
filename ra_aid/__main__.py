@@ -148,6 +148,12 @@ Examples:
     parser.add_argument(
         "--aider-config", type=str, help="Specify the aider config file path"
     )
+    parser.add_argument(
+        "--test-cmd", type=str, help="Command to run tests (e.g. 'pytest tests/')"
+    )
+    parser.add_argument(
+        "--auto-test", action="store_true", help="Enable automated testing before task completion"
+    )
 
     if args is None:
         args = sys.argv[1:]
@@ -344,6 +350,8 @@ def main():
             "web_research_enabled": web_research_enabled,
             "aider_config": args.aider_config,
             "limit_tokens": args.disable_limit_tokens,
+            "test_cmd": args.test_cmd,
+            "auto_test": args.auto_test,
         }
 
         # Store config in global memory for access by is_informational_query

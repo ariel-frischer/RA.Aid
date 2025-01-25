@@ -30,6 +30,7 @@ from langchain_core.tools import tool
 from ra_aid.console.output import print_agent_output
 from ra_aid.logging_config import get_logger
 from ra_aid.exceptions import AgentInterrupt
+from ra_aid.tools.shell import run_shell_command
 from ra_aid.tool_configs import (
     get_implementation_tools,
     get_research_tools,
@@ -669,6 +670,12 @@ def run_task_implementation_agent(
         run_config.update(config)
 
     try:
+        # Run tests before completing task if configured
+        test_cmd = test_command_from_config(config)
+        if test_cmd and not _global_memory.get("task_completed"):
+            if not run_and_validate_tests(test_cmd):
+                raise RuntimeError("Task cannot be completed due to test failures")
+            
         logger.debug("Implementation agent completed successfully")
         return run_agent_with_retry(agent, prompt, run_config)
     except (KeyboardInterrupt, AgentInterrupt):
@@ -707,6 +714,54 @@ class InterruptibleSection:
 def check_interrupt():
     if _CONTEXT_STACK and _INTERRUPT_CONTEXT is _CONTEXT_STACK[-1]:
         raise AgentInterrupt("Interrupt requested")
+
+
+def test_command_from_config(config: Dict[str, Any]) -> Optional[str]:
+    """Extract and validate test command from config.
+    
+    Args:
+        config: Configuration dictionary
+        
+    Returns:
+        Optional[str]: Test command if configured, None otherwise
+    """
+    test_cmd = config.get("test_cmd")
+    if not test_cmd and config.get("auto_test"):
+        # Default to running all tests with pytest
+        test_cmd = "pytest"
+    return test_cmd
+
+
+def run_and_validate_tests(test_cmd: str) -> bool:
+    """Run test command and validate results.
+    
+    Args:
+        test_cmd: Test command to execute
+        
+    Returns:
+        bool: True if tests passed, False if failed
+    """
+    try:
+        result = run_shell_command(test_cmd)
+        if not result["success"]:
+            handle_test_failure(test_cmd, result["output"])
+            return False
+        return True
+    except Exception as e:
+        logger.error("Failed to run tests: %s", str(e))
+        return False
+
+
+def handle_test_failure(test_cmd: str, output: str):
+    """Handle test command failures appropriately.
+    
+    Args:
+        test_cmd: The test command that failed
+        output: Command output containing failure details
+    """
+    error_msg = f"❌ Tests failed when running: {test_cmd}\n\nOutput:\n{output}"
+    print_error(error_msg)
+    logger.error("Test validation failed: %s", error_msg)
 
 
 def run_agent_with_retry(agent, prompt: str, config: dict) -> Optional[str]:

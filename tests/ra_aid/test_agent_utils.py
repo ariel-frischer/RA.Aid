@@ -245,3 +245,49 @@ def test_create_agent_anthropic_token_limiting_disabled(mock_model, mock_memory)
 
         assert agent == "react_agent"
         mock_react.assert_called_once_with(mock_model, [])
+
+
+@pytest.fixture
+def mock_shell_command():
+    """Fixture providing a mock shell command function."""
+    with patch('ra_aid.agent_utils.run_shell_command') as mock:
+        yield mock
+
+
+def test_test_command_from_config():
+    """Test extraction of test command from config."""
+    config = {"test_cmd": "pytest tests/", "auto_test": True}
+    assert test_command_from_config(config) == "pytest tests/"
+
+    config = {"auto_test": True}
+    assert test_command_from_config(config) == "pytest"
+
+    config = {}
+    assert test_command_from_config(config) is None
+
+
+def test_run_and_validate_tests_success(mock_shell_command):
+    """Test successful test execution and validation."""
+    mock_shell_command.return_value = {"success": True, "output": "All tests passed"}
+    
+    assert run_and_validate_tests("pytest tests/") is True
+    mock_shell_command.assert_called_once_with("pytest tests/")
+
+
+def test_run_and_validate_tests_failure(mock_shell_command):
+    """Test handling of test execution failures."""
+    mock_shell_command.return_value = {"success": False, "output": "Tests failed"}
+    
+    with patch('ra_aid.agent_utils.print_error') as mock_print_error:
+        assert run_and_validate_tests("pytest tests/") is False
+        mock_print_error.assert_called_once()
+
+
+def test_handle_test_failure():
+    """Test proper handling and formatting of test failures."""
+    with patch('ra_aid.agent_utils.print_error') as mock_print_error:
+        handle_test_failure("pytest tests/", "Test failures occurred")
+        mock_print_error.assert_called_once()
+        error_msg = mock_print_error.call_args[0][0]
+        assert "❌ Tests failed" in error_msg
+        assert "pytest tests/" in error_msg

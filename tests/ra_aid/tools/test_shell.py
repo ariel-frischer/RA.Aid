@@ -91,3 +91,64 @@ def test_shell_command_execution_error(mock_console, mock_prompt, mock_run_inter
     assert result['success'] is False
     assert result['return_code'] == 1
     assert "Command failed" in result['output']
+
+
+def test_test_command_execution(mock_console, mock_prompt, mock_run_interactive):
+    """Test execution of test commands with proper output parsing."""
+    _global_memory['config'] = {'cowboy_mode': True}
+    mock_run_interactive.return_value = (
+        b"===== test session starts =====\n"
+        b"collected 10 items\n"
+        b"===== 8 passed, 2 failed, 0 error =====",
+        1
+    )
+    
+    result = run_shell_command.invoke({"command": "pytest tests/"})
+    
+    assert result['success'] is False
+    assert result['return_code'] == 1
+    parsed = parse_test_output(result['output'])
+    assert parsed['total'] == 10
+    assert parsed['passed'] == 8
+    assert parsed['failed'] == 2
+
+
+def test_test_command_success(mock_console, mock_prompt, mock_run_interactive):
+    """Test successful test command execution."""
+    _global_memory['config'] = {'cowboy_mode': True}
+    mock_run_interactive.return_value = (
+        b"===== test session starts =====\n"
+        b"collected 5 items\n"
+        b"===== 5 passed, 0 failed, 0 error =====",
+        0
+    )
+    
+    result = run_shell_command.invoke({"command": "pytest"})
+    
+    assert result['success'] is True
+    assert result['return_code'] == 0
+    parsed = parse_test_output(result['output'])
+    assert parsed['total'] == 5
+    assert parsed['passed'] == 5
+    assert parsed['failed'] == 0
+
+
+def test_test_command_error_details(mock_console, mock_prompt, mock_run_interactive):
+    """Test extraction of error details from test output."""
+    _global_memory['config'] = {'cowboy_mode': True}
+    mock_run_interactive.return_value = (
+        b"===== test session starts =====\n"
+        b"collected 2 items\n"
+        b"____________________ test_failure ____________________\n"
+        b"def test_failure():\n"
+        b"    assert False\n"
+        b"E   assert False\n"
+        b"===== 1 passed, 1 failed, 0 error =====",
+        1
+    )
+    
+    result = run_shell_command.invoke({"command": "pytest"})
+    
+    parsed = parse_test_output(result['output'])
+    assert "test_failure" in parsed['errors']
+    assert parsed['failed'] == 1
