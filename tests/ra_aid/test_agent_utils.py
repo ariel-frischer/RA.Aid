@@ -291,19 +291,19 @@ def test_retry_manager_retries_on_api_errors():
     # Test other error types
     def test_error(error_class, message, status_code):
         response = create_response(status_code)
-        error_kwargs = {
-            "message": message,
-            "request": response.request,
-            "body": {"error": {
-                "type": "api_error",
-                "message": message
-            }}
-        }
-        # Add response kwarg for all except APIError
-        if error_class is not APIError:
-            error_kwargs["response"] = response
-            
-        error_instance = error_class(**error_kwargs)
+        
+        # Handle different error types with their specific constructor requirements
+        if error_class is APIError:
+            error_instance = error_class(
+                message=message,
+                body={"error": {"type": "api_error", "message": message}}
+            )
+        elif error_class is InternalServerError or error_class is RateLimitError:
+            error_instance = error_class(
+                message=message,
+                response=response,
+                body={"error": {"type": "api_error", "message": message}}
+            )
         mock_func = Mock(side_effect=[error_instance, "success"])
         result = retry_manager.execute(mock_func)
         assert result == "success"
