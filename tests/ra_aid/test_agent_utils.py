@@ -293,6 +293,7 @@ def test_retry_manager_retries_on_api_errors():
         response = create_response(status_code)
         error_kwargs = {
             "message": message,
+            "request": response.request,
             "body": {"error": {
                 "type": "api_error",
                 "message": message
