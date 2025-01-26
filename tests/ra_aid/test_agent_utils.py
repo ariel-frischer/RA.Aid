@@ -272,20 +272,30 @@ def test_retry_manager_retries_on_api_errors():
     """Test RetryManager retries on different API errors."""
     retry_manager = RetryManager(max_retries=3, base_delay=0.1)
     
-    # Test each error type individually
-    def test_error(error_class, message, status_code):
-        # Create mock response
-        response = httpx.Response(
+    def create_response(status_code):
+        return httpx.Response(
             status_code=status_code,
-            text="Error response",  # Basic text response
+            text="Error response",
             request=httpx.Request("POST", "https://api.anthropic.com/v1/messages")
         )
-        
+
+    # Test APITimeoutError separately since it has different constructor args
+    response = create_response(408)
+    error_instance = APITimeoutError(request=response.request)
+    mock_func = Mock(side_effect=[error_instance, "success"])
+    result = retry_manager.execute(mock_func)
+    assert result == "success"
+    assert mock_func.call_count == 2
+    mock_func.reset_mock()
+
+    # Test other error types
+    def test_error(error_class, message, status_code):
+        response = create_response(status_code)
         error_instance = error_class(
             message=message,
-            response=response,  # Required httpx.Response
+            response=response,
             body={"error": {
-                "type": "api_error", 
+                "type": "api_error",
                 "message": message
             }}
         )
@@ -295,9 +305,8 @@ def test_retry_manager_retries_on_api_errors():
         assert mock_func.call_count == 2
         mock_func.reset_mock()
 
-    # Test each error type with proper initialization
+    # Test remaining error types
     test_error(InternalServerError, "Internal server error", 500)
-    test_error(APITimeoutError, "Request timed out", 408)
     test_error(RateLimitError, "Rate limit exceeded", 429)
     test_error(APIError, "API request failed", 400)
 
