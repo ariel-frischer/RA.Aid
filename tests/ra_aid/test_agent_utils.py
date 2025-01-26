@@ -296,6 +296,7 @@ def test_retry_manager_retries_on_api_errors():
         if error_class is APIError:
             error_instance = error_class(
                 message=message,
+                request=response.request,
                 body={"error": {"type": "api_error", "message": message}}
             )
         elif error_class is InternalServerError or error_class is RateLimitError:
