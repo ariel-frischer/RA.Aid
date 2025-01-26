@@ -291,14 +291,18 @@ def test_retry_manager_retries_on_api_errors():
     # Test other error types
     def test_error(error_class, message, status_code):
         response = create_response(status_code)
-        error_instance = error_class(
-            message=message,
-            response=response,
-            body={"error": {
+        error_kwargs = {
+            "message": message,
+            "body": {"error": {
                 "type": "api_error",
                 "message": message
             }}
-        )
+        }
+        # Add response kwarg for all except APIError
+        if error_class is not APIError:
+            error_kwargs["response"] = response
+            
+        error_instance = error_class(**error_kwargs)
         mock_func = Mock(side_effect=[error_instance, "success"])
         result = retry_manager.execute(mock_func)
         assert result == "success"
