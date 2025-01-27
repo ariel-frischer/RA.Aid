@@ -1,4 +1,8 @@
 import os
+import json
+from datetime import datetime
+from pathlib import Path
+from dataclasses import dataclass
 from typing import Dict, List, Any, Union, Optional, Set
 from typing_extensions import TypedDict
 from rich.console import Console
@@ -524,6 +528,246 @@ def get_work_log() -> str:
 
     return "\n".join(entries).rstrip()  # Remove trailing newline
 
+
+@dataclass
+class StateSnapshot:
+    """Snapshot of global memory state with metadata.
+    
+    Attributes:
+        state: Copy of global memory state
+        timestamp: When snapshot was created
+        agent_type: Type of agent that created state (research/planning/etc)
+        input_args: Original input arguments
+        prompt: Original prompt/query
+    """
+    state: Dict[str, Any]
+    timestamp: datetime
+    agent_type: str
+    input_args: Dict[str, Any]
+    prompt: str
+
+
+class MemoryEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return {'__type__': 'datetime', 'value': obj.isoformat()}
+        if isinstance(obj, SnippetInfo):
+            return {'__type__': 'SnippetInfo', 'value': obj.__dict__}
+        if isinstance(obj, WorkLogEntry):
+            return {'__type__': 'WorkLogEntry', 'value': obj.__dict__}
+        return super().default(obj)
+
+
+def ensure_cache_dir() -> Path:
+    """Create and return the cache directory path."""
+    cache_dir = Path.home() / '.ra_aid' / 'cache'
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir
+
+
+def serialize_state(snapshot: StateSnapshot) -> str:
+    """Convert state snapshot to JSON string."""
+    try:
+        return json.dumps(snapshot.__dict__, cls=MemoryEncoder, indent=2)
+    except Exception as e:
+        raise ValueError(f"Failed to serialize state: {e}")
+
+
+def deserialize_state(json_str: str) -> StateSnapshot:
+    """Restore state snapshot from JSON string."""
+    def object_hook(dct):
+        if '__type__' in dct:
+            if dct['__type__'] == 'datetime':
+                return datetime.fromisoformat(dct['value'])
+            if dct['__type__'] == 'SnippetInfo':
+                return SnippetInfo(**dct['value'])
+            if dct['__type__'] == 'WorkLogEntry':
+                return WorkLogEntry(**dct['value'])
+        return dct
+
+    try:
+        data = json.loads(json_str, object_hook=object_hook)
+        return StateSnapshot(**data)
+    except Exception as e:
+        raise ValueError(f"Failed to deserialize state: {e}")
+
+
+def save_state(snapshot: StateSnapshot, filename: Optional[str] = None) -> Path:
+    """Save state snapshot to file atomically.
+    
+    Args:
+        snapshot: StateSnapshot to save
+        filename: Optional custom filename, default is timestamp-based
+        
+    Returns:
+        Path to saved snapshot file
+        
+    Raises:
+        IOError: If snapshot cannot be saved
+    """
+    cache_dir = ensure_cache_dir()
+    if not filename:
+        filename = f"state_{snapshot.timestamp.isoformat()}.json"
+    
+    filepath = cache_dir / filename
+    tmp_filepath = filepath.with_suffix('.tmp')
+    
+    try:
+        json_data = serialize_state(snapshot)
+        with open(tmp_filepath, 'w') as f:
+            f.write(json_data)
+        tmp_filepath.rename(filepath)
+        return filepath
+    except Exception as e:
+        if tmp_filepath.exists():
+            tmp_filepath.unlink()
+        raise IOError(f"Failed to save state snapshot: {e}")
+
+
+def load_state(filepath: Path) -> StateSnapshot:
+    """Load state snapshot from file.
+    
+    Args:
+        filepath: Path to snapshot file
+        
+    Returns:
+        Loaded StateSnapshot object
+        
+    Raises:
+        IOError: If file cannot be read or deserialized
+    """
+    try:
+        with open(filepath) as f:
+            return deserialize_state(f.read())
+    except Exception as e:
+        logger.error(f"Failed to load state snapshot from {filepath}: {e}")
+        raise IOError(f"Failed to load state snapshot: {e}")
+
+def save_state(agent_type: str, input_args: Dict[str, Any], prompt: str) -> str:
+    """Save current global memory state with metadata.
+    
+    Args:
+        agent_type: Type of agent creating the state
+        input_args: Original input arguments
+        prompt: Original prompt/query
+        
+    Returns:
+        Path to saved state file as string
+        
+    Raises:
+        IOError: If state cannot be saved
+    """
+    try:
+        snapshot = StateSnapshot(
+            state=dict(_global_memory),
+            timestamp=datetime.now(),
+            agent_type=agent_type,
+            input_args=input_args,
+            prompt=prompt
+        )
+        filepath = save_state(snapshot)
+        logger.info(f"Saved state snapshot to {filepath}")
+        return str(filepath)
+    except Exception as e:
+        logger.error(f"Failed to save state: {e}")
+        raise IOError(f"Failed to save state: {e}")
+
+def load_state(filepath: str) -> StateSnapshot:
+    """Load state snapshot from file.
+    
+    Args:
+        filepath: Path to state file
+        
+    Returns:
+        Loaded StateSnapshot object
+        
+    Raises:
+        IOError: If state cannot be loaded
+    """
+    try:
+        return load_state(Path(filepath))
+    except Exception as e:
+        logger.error(f"Failed to load state from {filepath}: {e}")
+        raise IOError(f"Failed to load state: {e}")
+
+def search_states(query: Dict[str, Any]) -> List[str]:
+    """Search cached states using query parameters.
+    
+    Args:
+        query: Dict of search parameters:
+            - agent_type: Optional agent type to match
+            - start_date: Optional start date for timestamp range
+            - end_date: Optional end date for timestamp range
+            - prompt_contains: Optional substring to match in prompts
+            
+    Returns:
+        List of matching state file paths
+        
+    Example:
+        search_states({
+            'agent_type': 'research',
+            'start_date': '2024-01-01',
+            'prompt_contains': 'database'
+        })
+    """
+    try:
+        cache_dir = ensure_cache_dir()
+        results = []
+        
+        # Convert dates if provided
+        start_date = None
+        end_date = None
+        if 'start_date' in query:
+            start_date = datetime.fromisoformat(query['start_date'])
+        if 'end_date' in query:
+            end_date = datetime.fromisoformat(query['end_date'])
+            
+        # Search all json files in cache
+        for filepath in cache_dir.glob('*.json'):
+            try:
+                snapshot = load_state(filepath)
+                
+                # Check each query parameter
+                matches = True
+                if 'agent_type' in query:
+                    matches &= snapshot.agent_type == query['agent_type']
+                if start_date:
+                    matches &= snapshot.timestamp >= start_date
+                if end_date:
+                    matches &= snapshot.timestamp <= end_date
+                if 'prompt_contains' in query:
+                    matches &= query['prompt_contains'].lower() in snapshot.prompt.lower()
+                    
+                if matches:
+                    results.append(str(filepath))
+                    
+            except Exception as e:
+                logger.warning(f"Failed to load state file {filepath} during search: {e}")
+                continue
+                
+        return results
+        
+    except Exception as e:
+        logger.error(f"Failed to search states: {e}")
+        raise IOError(f"Failed to search states: {e}")
+
+def restore_state(filepath: str) -> None:
+    """Restore global memory from state file.
+    
+    Args:
+        filepath: Path to state file to restore from
+        
+    Raises:
+        IOError: If state cannot be restored
+    """
+    try:
+        snapshot = load_state(filepath)
+        _global_memory.clear()
+        _global_memory.update(snapshot.state)
+        logger.info(f"Restored state from {filepath}")
+    except Exception as e:
+        logger.error(f"Failed to restore state from {filepath}: {e}")
+        raise IOError(f"Failed to restore state: {e}")
 
 def reset_work_log() -> str:
     """Clear the work log.

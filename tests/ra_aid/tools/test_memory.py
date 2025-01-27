@@ -14,7 +14,9 @@ from ra_aid.tools.memory import (
     swap_task_order,
     log_work_event,
     reset_work_log,
-    get_work_log
+    get_work_log,
+    save_state,
+    load_state
 )
 
 @pytest.fixture
@@ -134,6 +136,95 @@ def test_get_work_log(reset_memory):
     
     assert "First event" in log
     assert "Second event" in log
+
+def test_save_load_state(reset_memory, tmp_path):
+    """Test saving and loading state snapshots"""
+    # Setup test data
+    _global_memory['test_key'] = 'test_value'
+    input_args = {'arg1': 'value1'}
+    prompt = "Test prompt"
+    
+    # Save state
+    filepath = save_state('test_agent', input_args, prompt)
+    assert os.path.exists(filepath)
+    
+    # Load state
+    snapshot = load_state(filepath)
+    assert snapshot.agent_type == 'test_agent'
+    assert snapshot.input_args == input_args
+    assert snapshot.prompt == prompt
+    assert snapshot.state['test_key'] == 'test_value'
+    
+    # Clean up
+    os.unlink(filepath)
+
+def test_search_states(reset_memory, tmp_path):
+    """Test searching state snapshots"""
+    # Create test states
+    states = [
+        ('research', {'arg': 1}, 'database query'),
+        ('planning', {'arg': 2}, 'api implementation'),
+        ('research', {'arg': 3}, 'security audit')
+    ]
+    
+    filepaths = []
+    for agent_type, args, prompt in states:
+        filepath = save_state(agent_type, args, prompt)
+        filepaths.append(filepath)
+        
+    try:
+        # Search by agent type
+        results = search_states({'agent_type': 'research'})
+        assert len(results) == 2
+        
+        # Search by prompt
+        results = search_states({'prompt_contains': 'database'})
+        assert len(results) == 1
+        
+        # Search by date range
+        tomorrow = (datetime.now() + timedelta(days=1)).isoformat()
+        results = search_states({
+            'start_date': '2024-01-01',
+            'end_date': tomorrow
+        })
+        assert len(results) == 3
+        
+    finally:
+        # Clean up
+        for filepath in filepaths:
+            os.unlink(filepath)
+
+def test_restore_state(reset_memory, tmp_path):
+    """Test restoring global memory from state file"""
+    # Setup initial state
+    _global_memory['test_key'] = 'test_value'
+    filepath = save_state('test_agent', {}, 'test prompt')
+    
+    try:
+        # Clear memory
+        _global_memory.clear()
+        assert 'test_key' not in _global_memory
+        
+        # Restore state
+        restore_state(filepath)
+        assert _global_memory['test_key'] == 'test_value'
+        
+    finally:
+        # Clean up
+        os.unlink(filepath)
+
+def test_state_error_handling(reset_memory):
+    """Test error handling in state management functions"""
+    # Test invalid file path
+    with pytest.raises(IOError):
+        load_state('nonexistent.json')
+        
+    with pytest.raises(IOError):
+        restore_state('nonexistent.json')
+        
+    # Test invalid query
+    with pytest.raises(IOError):
+        search_states({'start_date': 'invalid-date'})
 
 def test_reset_work_log(reset_memory):
     """Test resetting the work log"""
