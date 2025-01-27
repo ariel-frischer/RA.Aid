@@ -75,8 +75,8 @@ def test_agent_runner_with_test_integration(
     # Setup mock to simulate test execution flow
     mock_test_executor.execute.return_value = (True, "updated prompt", False, 1)
 
-    # Setup retry manager to return True to simulate successful agent run
-    mock_retry_manager.execute.return_value = True
+    # Setup retry manager to return False then True to simulate agent iteration then completion
+    mock_retry_manager.execute.side_effect = [False, True]
 
     result = agent_runner.run()
 
