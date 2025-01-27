@@ -1,13 +1,11 @@
 """Utility functions for working with agents."""
 
-import signal
-import threading
 import uuid
 from typing import Any, Dict, List, Optional, Sequence, TypeVar
 
 import litellm
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import BaseMessage, HumanMessage, trim_messages
+from langchain_core.messages import BaseMessage, trim_messages
 from langchain_core.tools import tool
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
@@ -20,9 +18,7 @@ from rich.panel import Panel
 from ra_aid.agents.ciayn_agent import CiaynAgent
 from ra_aid.config import DEFAULT_RECURSION_LIMIT
 from ra_aid.console.formatting import print_stage_header
-from ra_aid.console.output import print_agent_output
 from ra_aid.exceptions import AgentInterrupt
-from ra_aid.interruptible_section import InterruptibleSection, _request_interrupt
 from ra_aid.logging_config import get_logger
 from ra_aid.models_tokens import DEFAULT_TOKEN_LIMIT, models_tokens
 from ra_aid.project_info import (
@@ -46,8 +42,6 @@ from ra_aid.prompts import (
     WEB_RESEARCH_PROMPT_SECTION_PLANNING,
     WEB_RESEARCH_PROMPT_SECTION_RESEARCH,
 )
-from ra_aid.retry_manager import RetryManager
-from ra_aid.test_executor import TestExecutor
 from ra_aid.tool_configs import (
     get_implementation_tools,
     get_planning_tools,
@@ -672,76 +666,6 @@ def run_task_implementation_agent(
         raise
 
 
-def _check_interruption(section: InterruptibleSection) -> None:
-    """Check if execution has been interrupted.
-
-    Args:
-        section: InterruptibleSection instance for interrupt handling
-
-    Raises:
-        AgentInterrupt: If execution is interrupted
-    """
-    if section.is_interrupted():
-        raise AgentInterrupt("Agent execution interrupted")
-
-
-def _process_chunk(chunk: Dict[str, Any]) -> None:
-    """Process a single chunk of agent output.
-
-    Args:
-        chunk: Output chunk from the agent
-    """
-    logger.debug("Agent output: %s", chunk)
-    print_agent_output(chunk)
-
-
-def _check_completion_state() -> bool:
-    """Check if any completion states are set.
-
-    Returns:
-        bool: True if a completion state was handled, False otherwise
-    """
-    if _global_memory.get("plan_completed"):
-        _global_memory.update(
-            {
-                "plan_completed": False,
-                "task_completed": False,
-                "completion_message": "",
-            }
-        )
-        return True
-
-    if _global_memory.get("task_completed"):
-        _global_memory.update({"task_completed": False, "completion_message": ""})
-        return True
-
-    return False
-
-
-def run_agent_iteration(
-    agent, prompt: str, config: dict, section: InterruptibleSection
-) -> bool:
-    """Run one iteration of the agent.
-
-    Args:
-        agent: The agent instance to run
-        prompt: The prompt to send to the agent
-        config: Configuration dictionary
-        section: InterruptibleSection instance for interrupt handling
-
-    Returns:
-        bool: True if iteration completed successfully, False otherwise
-    """
-    for chunk in agent.stream({"messages": [HumanMessage(content=prompt)]}, config):
-        _check_interruption(section)
-        _process_chunk(chunk)
-
-        if _check_completion_state():
-            return True
-
-    return False
-
-
 def run_agent_with_retry(agent, prompt: str, config: dict) -> Optional[str]:
     """Run an agent with retry logic for API errors and test execution.
 
@@ -752,59 +676,8 @@ def run_agent_with_retry(agent, prompt: str, config: dict) -> Optional[str]:
 
     Returns:
         Optional[str]: Completion message if successful
-
-    This function handles:
-    - API retries with exponential backoff
-    - Interrupt handling
-    - Test command execution and retries
-    - Agent execution depth tracking
-    - Memory state cleanup
     """
-    logger.debug("Running agent with prompt length: %d", len(prompt))
+    from ra_aid.agent_runner import AgentRunner
 
-    # Set up interrupt handling for main thread
-    original_handler = None
-    if threading.current_thread() is threading.main_thread():
-        original_handler = signal.getsignal(signal.SIGINT)
-        signal.signal(signal.SIGINT, _request_interrupt)
-
-    # Initialize components
-    retry_manager = RetryManager()
-    test_executor = TestExecutor(config)
-    original_prompt = prompt
-    test_attempts = 0
-
-    with InterruptibleSection() as _section:
-        try:
-            # Track agent execution depth
-            current_depth = _global_memory.get("agent_depth", 0)
-            _global_memory["agent_depth"] = current_depth + 1
-
-            while True:
-                should_break = retry_manager.execute(
-                    run_agent_iteration, agent, prompt, config, _section
-                )
-                if should_break:
-                    break
-
-                continue_execution, prompt, _auto_test, test_attempts = (
-                    test_executor.execute(test_attempts, original_prompt)
-                )
-                if not continue_execution:
-                    continue
-
-                logger.debug("Agent run completed successfully")
-                return "Agent run completed successfully"
-
-        finally:
-            # Clean up memory state
-            _global_memory["agent_depth"] = max(
-                0, _global_memory.get("agent_depth", 1) - 1
-            )
-
-            # Restore original signal handler
-            if (
-                original_handler
-                and threading.current_thread() is threading.main_thread()
-            ):
-                signal.signal(signal.SIGINT, original_handler)
+    runner = AgentRunner(agent, prompt, config)
+    return runner.run()

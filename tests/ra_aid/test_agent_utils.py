@@ -14,6 +14,7 @@ from ra_aid.agent_utils import (
     AgentState,
     create_agent,
     get_model_token_limit,
+    run_agent_with_retry,
     state_modifier,
 )
 from ra_aid.exceptions import AgentInterrupt
@@ -357,38 +358,24 @@ def test_retry_manager_agent_interrupt():
 
 
 def test_run_agent_with_retry_integration():
-    """Test integration of run_agent_with_retry with components."""
-    from langchain_core.messages import HumanMessage
-
-    from ra_aid.agent_utils import run_agent_with_retry
+    """Test that run_agent_with_retry correctly uses AgentRunner."""
 
     mock_agent = Mock()
-    mock_agent.stream.return_value = [{"type": "output", "content": "test"}]
+    test_prompt = "test prompt"
+    test_config = {"test_cmd": "echo test"}
 
-    with (
-        patch("ra_aid.agent_utils.RetryManager") as mock_retry_mgr,
-        patch("ra_aid.agent_utils.TestExecutor") as mock_test_exec,
-        patch("ra_aid.agent_utils.InterruptibleSection") as mock_section,
-        patch("ra_aid.agent_utils._global_memory") as mock_memory,
-    ):
-        # Set up mocks
-        mock_retry_mgr.return_value.execute.side_effect = lambda f, *args, **kwargs: f(*args, **kwargs)
-        mock_test_exec.return_value.execute.return_value = (True, "prompt", False, 0)
-        mock_section.return_value.__enter__.return_value.is_interrupted.return_value = (
-            False
-        )
-        mock_memory.get.return_value = 0
+    with patch("ra_aid.agent_runner.AgentRunner") as MockAgentRunner:
+        # Configure mock
+        mock_runner = MockAgentRunner.return_value
+        mock_runner.run.return_value = "Agent run completed successfully"
 
-        result = run_agent_with_retry(
-            mock_agent, "test prompt", {"test_cmd": "echo test"}
-        )
+        # Run the function
+        result = run_agent_with_retry(mock_agent, test_prompt, test_config)
 
-        # Verify interactions
+        # Verify AgentRunner was created and run with correct args
+        MockAgentRunner.assert_called_once_with(mock_agent, test_prompt, test_config)
+        mock_runner.run.assert_called_once()
         assert result == "Agent run completed successfully"
-        mock_agent.stream.assert_called_once_with(
-            {"messages": [HumanMessage(content="test prompt")]},
-            {"test_cmd": "echo test"},
-        )
 
 
 def test_create_agent_anthropic_token_limiting_disabled(mock_model, mock_memory):
