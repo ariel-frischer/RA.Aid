@@ -1,5 +1,7 @@
 import pytest
 
+from unittest.mock import Mock
+
 from ra_aid.tools.memory import (
     _global_memory,
     delete_key_facts,
@@ -14,8 +16,10 @@ from ra_aid.tools.memory import (
     get_related_files,
     get_work_log,
     log_work_event,
+    one_shot_completed,
     reset_work_log,
     swap_task_order,
+    task_completed,
 )
 
 
@@ -673,3 +677,129 @@ def test_swap_task_order_after_delete(reset_memory):
     # Verify swap worked
     assert _global_memory["tasks"][0] == "Task 3"
     assert _global_memory["tasks"][2] == "Task 1"
+
+
+def test_one_shot_completed_with_passing_tests(reset_memory):
+    """Test one_shot_completed with passing tests"""
+    from ra_aid.test_executor import TestExecutor
+
+    # Mock test executor with passing tests
+    mock_executor = Mock(spec=TestExecutor)
+    mock_executor.execute.return_value = (True, "", True, 1)
+    _global_memory["test_executor"] = mock_executor
+
+    # Call one_shot_completed
+    result = one_shot_completed.invoke({"message": "Task complete"})
+
+    # Verify test executor was called
+    mock_executor.execute.assert_called_once_with("")
+
+    # Verify completion state
+    assert result == "Completion noted."
+    assert _global_memory["task_completed"] is True
+    assert _global_memory["completion_message"] == "Task complete"
+
+
+def test_one_shot_completed_with_failing_tests(reset_memory):
+    """Test one_shot_completed with failing tests"""
+    from ra_aid.test_executor import TestExecutor
+
+    # Set initial state
+    _global_memory["task_completed"] = False
+    _global_memory["completion_message"] = ""
+
+    # Mock test executor with failing tests
+    mock_executor = Mock(spec=TestExecutor)
+    mock_executor.execute.return_value = (False, "", False, 1)
+    _global_memory["test_executor"] = mock_executor
+
+    # Call one_shot_completed
+    result = one_shot_completed.invoke({"message": "Task complete"})
+
+    # Verify test executor was called
+    mock_executor.execute.assert_called_once_with("")
+
+    # Verify completion was prevented and state unchanged
+    assert result == "Cannot complete - tests failed"
+    assert _global_memory["task_completed"] is False
+    assert _global_memory["completion_message"] == ""
+
+
+def test_one_shot_completed_with_implementation_requested(reset_memory):
+    """Test one_shot_completed when implementation was requested"""
+    # Set initial state
+    _global_memory["task_completed"] = False
+    _global_memory["completion_message"] = ""
+    _global_memory["implementation_requested"] = True
+    _global_memory.pop("test_executor", None)  # Ensure no test executor
+
+    # Call one_shot_completed
+    result = one_shot_completed.invoke({"message": "Task complete"})
+
+    # Verify completion was prevented and state unchanged
+    assert result == "Cannot complete in one shot - implementation was requested"
+    assert _global_memory["task_completed"] is False
+    assert _global_memory["completion_message"] == ""
+    assert _global_memory["implementation_requested"] is True
+
+
+def test_task_completed_with_passing_tests(reset_memory):
+    """Test task_completed with passing tests"""
+    from ra_aid.test_executor import TestExecutor
+
+    # Mock test executor with passing tests
+    mock_executor = Mock(spec=TestExecutor)
+    mock_executor.execute.return_value = (True, "", True, 1)
+    _global_memory["test_executor"] = mock_executor
+
+    # Call task_completed
+    result = task_completed.invoke({"message": "Task complete"})
+
+    # Verify test executor was called
+    mock_executor.execute.assert_called_once_with("")
+
+    # Verify completion state
+    assert result == "Completion noted."
+    assert _global_memory["task_completed"] is True
+    assert _global_memory["completion_message"] == "Task complete"
+
+
+def test_task_completed_with_failing_tests(reset_memory):
+    """Test task_completed with failing tests"""
+    from ra_aid.test_executor import TestExecutor
+
+    # Set initial state
+    _global_memory["task_completed"] = False
+    _global_memory["completion_message"] = ""
+
+    # Mock test executor with failing tests
+    mock_executor = Mock(spec=TestExecutor)
+    mock_executor.execute.return_value = (False, "", False, 1)
+    _global_memory["test_executor"] = mock_executor
+
+    # Call task_completed
+    result = task_completed.invoke({"message": "Task complete"})
+
+    # Verify test executor was called
+    mock_executor.execute.assert_called_once_with("")
+
+    # Verify completion was prevented and state unchanged
+    assert result == "Cannot complete - tests failed"
+    assert _global_memory["task_completed"] is False
+    assert _global_memory["completion_message"] == ""
+
+
+def test_task_completed_without_test_executor(reset_memory):
+    """Test task_completed when no test executor is configured"""
+    # Set initial state and ensure no test executor
+    _global_memory["task_completed"] = False
+    _global_memory["completion_message"] = ""
+    _global_memory.pop("test_executor", None)  # Explicitly remove test executor
+
+    # Call task_completed without test executor
+    result = task_completed.invoke({"message": "Task complete"})
+
+    # Verify completion succeeded
+    assert result == "Completion noted."
+    assert _global_memory["task_completed"] is True
+    assert _global_memory["completion_message"] == "Task complete"

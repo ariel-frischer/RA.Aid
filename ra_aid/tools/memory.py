@@ -37,6 +37,7 @@ _global_memory: Dict[
         str,
         int,
         List[WorkLogEntry],
+        Any,  # For test_executor
     ],
 ] = {
     "research_notes": [],
@@ -55,6 +56,7 @@ _global_memory: Dict[
     "plan_completed": False,
     "agent_depth": 0,
     "work_log": [],  # List[WorkLogEntry] - Timestamped work events
+    "test_executor": None,  # TestExecutor instance
 }
 
 
@@ -350,9 +352,18 @@ def one_shot_completed(message: str) -> str:
 
     Args:
         message: Completion message to display
+
+    Returns:
+        Success message or error if tests fail
     """
     if _global_memory.get("implementation_requested", False):
         return "Cannot complete in one shot - implementation was requested"
+
+    test_executor = _global_memory.get("test_executor")
+    if test_executor:
+        should_break, prompt, auto_test, test_attempts = test_executor.execute("")
+        if not should_break:
+            return "Cannot complete - tests failed"
 
     _global_memory["task_completed"] = True
     _global_memory["completion_message"] = message
@@ -369,8 +380,14 @@ def task_completed(message: str) -> str:
         message: Message explaining how/why the task is complete
 
     Returns:
-        The completion message
+        Success message or error if tests fail
     """
+    test_executor = _global_memory.get("test_executor")
+    if test_executor:
+        should_break, prompt, auto_test, test_attempts = test_executor.execute("")
+        if not should_break:
+            return "Cannot complete - tests failed"
+
     _global_memory["task_completed"] = True
     _global_memory["completion_message"] = message
     console.print(Panel(Markdown(message), title="✅ Task Completed"))

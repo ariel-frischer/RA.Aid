@@ -40,7 +40,6 @@ class AgentRunner:
         self.original_prompt = initial_prompt
         self.current_prompt = initial_prompt
         self.config = config
-        self.test_attempts = 0
         self.agent_depth = 0
         self._original_signal_handler = None
         self._interrupt_section = InterruptibleSection()
@@ -64,18 +63,8 @@ class AgentRunner:
     def _run_agent_loop(self) -> Optional[str]:
         """Main execution loop handling retries and test integration."""
         while True:
-            should_break = self._execute_agent_iteration()
-
-            if should_break:
-                logger.debug("Agent run completed successfully")
-                return "Agent run completed successfully"
-
-            continue_execution, prompt, auto_test, test_attempts = (
-                self.test_executor.execute(self.test_attempts, self.original_prompt)
-            )
-            self._update_from_test_state(continue_execution, prompt, test_attempts)
-
-            if should_break or not continue_execution:
+            agent_complete = self._execute_agent_iteration()
+            if agent_complete:
                 logger.debug("Agent run completed successfully")
                 return "Agent run completed successfully"
 
@@ -114,10 +103,9 @@ class AgentRunner:
             signal.signal(signal.SIGINT, self._original_signal_handler)
 
     def _update_from_test_state(
-        self, continue_execution: bool, prompt: str, test_attempts: int
+        self, should_break: bool, prompt: str
     ):
         """Update runner state from test execution results."""
-        self.test_attempts = test_attempts
         self.current_prompt = prompt
 
     def _check_interrupts(self, section: InterruptibleSection):

@@ -32,7 +32,7 @@ def mock_retry_manager():
 def mock_test_executor():
     """Fixture providing a mock TestExecutor."""
     executor = Mock(spec=TestExecutor)
-    executor.execute.return_value = (True, "test prompt", False, 0)
+    executor.execute.return_value = (True, "test prompt", False, 1)
     return executor
 
 
@@ -54,18 +54,21 @@ def test_agent_runner_initialization(agent_runner):
     assert agent_runner.original_prompt == "test prompt"
     assert agent_runner.current_prompt == "test prompt"
     assert agent_runner.config == {"test_key": "test_value"}
-    assert agent_runner.test_attempts == 0
     assert agent_runner.agent_depth == 0
     assert isinstance(agent_runner._interrupt_section, InterruptibleSection)
 
 
-def test_agent_runner_successful_execution(agent_runner, mock_retry_manager):
+def test_agent_runner_successful_execution(agent_runner, mock_retry_manager, mock_test_executor):
     """Test successful agent execution flow."""
+    # Configure test executor to indicate success
+    mock_test_executor.execute.return_value = (True, "test prompt", True, 1)
     mock_retry_manager.execute.return_value = True
 
     result = agent_runner.run()
 
     assert result == "Agent run completed successfully"
+    # Verify test executor was called with empty prompt
+    mock_test_executor.execute.assert_called_once_with("")
     mock_retry_manager.execute.assert_called_once()
 
 
@@ -73,8 +76,11 @@ def test_agent_runner_with_test_integration(
     agent_runner, mock_test_executor, mock_retry_manager
 ):
     """Test agent execution with test integration."""
-    # Setup mock to simulate test execution flow
-    mock_test_executor.execute.return_value = (True, "updated prompt", False, 1)
+    # Setup test execution flow with initial failure then success
+    mock_test_executor.execute.side_effect = [
+        (False, "updated prompt with failure", True, 1),  # First call - test fails
+        (True, "updated prompt with success", True, 2)    # Second call - test passes
+    ]
 
     # Setup retry manager to return False then True to simulate agent iteration then completion
     mock_retry_manager.execute.side_effect = [False, True]
@@ -83,39 +89,51 @@ def test_agent_runner_with_test_integration(
 
     assert result == "Agent run completed successfully"
 
-    # Verify test executor was called with correct arguments
-    mock_test_executor.execute.assert_called_once_with(0, "test prompt")
+    # Verify test executor was called twice
+    assert mock_test_executor.execute.call_count == 2
+    mock_test_executor.execute.assert_has_calls([
+        mock.call("test prompt"),
+        mock.call("")  # Second call during completion check
+    ])
 
-    # Verify state updates
-    assert agent_runner.test_attempts == 1
-    assert agent_runner.current_prompt == "updated prompt"
+    # Verify test executor state was updated correctly
+    assert mock_test_executor.auto_test is True
+    assert mock_test_executor.test_attempts == 2
+    assert agent_runner.current_prompt == "updated prompt with success"
 
-    # Verify retry manager was called twice - once with initial prompt, once with updated prompt
+    # Verify retry manager was called twice with correct prompts
     assert mock_retry_manager.execute.call_count == 2
     mock_retry_manager.execute.assert_has_calls([
         mock.call(
             agent_runner._run_agent_iteration,
             agent_runner.agent,
-            "test prompt",
+            "updated prompt with failure",
             agent_runner.config,
             agent_runner._interrupt_section
         ),
         mock.call(
             agent_runner._run_agent_iteration,
             agent_runner.agent,
-            "updated prompt",
+            "updated prompt with success",
             agent_runner.config,
             agent_runner._interrupt_section
         )
     ])
 
 
-def test_agent_runner_interrupt_handling(agent_runner, mock_retry_manager):
+def test_agent_runner_interrupt_handling(agent_runner, mock_retry_manager, mock_test_executor):
     """Test agent handles interrupts properly."""
+    # Configure test executor to pass initially
+    mock_test_executor.execute.return_value = (True, "test prompt", True, 1)
+    
+    # Configure retry manager to raise interrupt
     mock_retry_manager.execute.side_effect = AgentInterrupt("Test interrupt")
 
     with pytest.raises(AgentInterrupt):
         agent_runner.run()
+
+    # Verify test executor was called before interrupt
+    mock_test_executor.execute.assert_called_once_with("")
 
 
 def test_agent_runner_signal_handling(agent_runner):

@@ -37,6 +37,7 @@ class TestExecutor:
             "max_test_cmd_retries", DEFAULT_MAX_TEST_CMD_RETRIES
         )
         self.auto_test = config.get("auto_test", False)
+        self.test_attempts = 0
 
     def display_test_failure(self, attempts: int) -> None:
         """Display test failure message.
@@ -134,7 +135,7 @@ class TestExecutor:
         return False
 
     def execute(
-        self, test_attempts: int, original_prompt: str
+        self, original_prompt: str
     ) -> tuple[bool, str, bool, int]:
         """Execute test command if configured.
 
@@ -143,11 +144,11 @@ class TestExecutor:
             - bool: Whether to continue (True) or retry (False)
             - str: The prompt to use
             - bool: Updated auto_test flag
-            - int: Updated test attempts count
+            - int: Current test attempts count
         """
         state = TestState(
             prompt=original_prompt,
-            test_attempts=test_attempts,
+            test_attempts=self.test_attempts,
             auto_test=self.auto_test,
         )
 
@@ -167,10 +168,11 @@ class TestExecutor:
             )
             state = self.handle_user_response(response, state)
         else:
-            if self.check_max_retries(test_attempts):
+            if self.check_max_retries(self.test_attempts):
                 state.should_break = True
             else:
                 state = self.run_test_command(state)
 
         self.auto_test = state.auto_test
-        return state.should_break, state.prompt, self.auto_test, state.test_attempts
+        self.test_attempts = state.test_attempts
+        return state.should_break, state.prompt, self.auto_test, self.test_attempts
