@@ -313,7 +313,7 @@ def test_emit_related_files_duplicates(reset_memory, tmp_path):
     # Add initial files
     result = emit_related_files.invoke({"files": [str(test_file), str(main_file)]})
     assert result == f"File ID #0: {test_file}\nFile ID #1: {main_file}"
-    first_id = 0  # ID of test.py
+    _first_id = 0  # ID of test.py
     
     # Try adding duplicates
     result = emit_related_files.invoke({"files": [str(test_file)]})

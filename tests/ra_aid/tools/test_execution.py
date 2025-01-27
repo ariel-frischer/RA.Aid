@@ -161,7 +161,7 @@ def test_test_executor(
     """
     with patch("ra_aid.test_executor.ask_human") as mock_ask_human, \
          patch("ra_aid.test_executor.run_shell_command") as mock_run_cmd, \
-         patch("ra_aid.test_executor.console") as mock_console, \
+         patch("ra_aid.test_executor.console") as _mock_console, \
          patch("ra_aid.test_executor.logger") as mock_logger:
         
         # Configure mocks based on mock_responses

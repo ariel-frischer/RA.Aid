@@ -2,16 +2,9 @@
 
 import os
 import sys
-from dataclasses import dataclass
 from typing import List, Any
 
 from ra_aid.provider_strategy import ProviderFactory, ValidationResult
-
-@dataclass
-class ValidationResult:
-    """Result of validation."""
-    valid: bool
-    missing_vars: List[str]
 
 def validate_provider(provider: str) -> ValidationResult:
     """Validate provider configuration."""

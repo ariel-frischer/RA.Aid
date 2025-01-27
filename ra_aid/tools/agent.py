@@ -1,17 +1,18 @@
 """Tools for spawning and managing sub-agents."""
 
-from langchain_core.tools import tool
 from typing import Dict, Any, Union, List
-from ..agent_utils import AgentInterrupt
-from ra_aid.exceptions import AgentInterrupt
-ResearchResult = Dict[str, Union[str, bool, Dict[int, Any], List[Any], None]]
+from langchain_core.tools import tool
 from rich.console import Console
-from ra_aid.tools.memory import _global_memory
-from ra_aid.console.formatting import print_error
-from .memory import get_memory_value, get_related_files, get_work_log
-from .human import ask_human
-from ..llm import initialize_llm
+
+from ..agent_utils import AgentInterrupt
 from ..console import print_task_header
+from ..llm import initialize_llm
+from ra_aid.console.formatting import print_error
+from ra_aid.tools.memory import _global_memory
+from .human import ask_human
+from .memory import get_memory_value, get_related_files, get_work_log
+
+ResearchResult = Dict[str, Union[str, bool, Dict[int, Any], List[Any], None]]
 
 CANCELLED_BY_USER_REASON = "The operation was explicitly cancelled by the user. This typically is an indication that the action requested was not aligned with the user request."
 
@@ -53,7 +54,7 @@ def request_research(query: str) -> ResearchResult:
     try:
         # Run research agent
         from ..agent_utils import run_research_agent
-        result = run_research_agent(
+        _result = run_research_agent(
             query,
             model,
             expert_enabled=True,
@@ -113,7 +114,7 @@ def request_web_research(query: str) -> ResearchResult:
     try:
         # Run web research agent
         from ..agent_utils import run_web_research_agent
-        result = run_web_research_agent(
+        _result = run_web_research_agent(
             query,
             model,
             expert_enabled=True,
@@ -170,7 +171,7 @@ def request_research_and_implementation(query: str) -> Dict[str, Any]:
     try:
         # Run research agent
         from ..agent_utils import run_research_agent
-        result = run_research_agent(
+        _result = run_research_agent(
             query,
             model,
             expert_enabled=True,
@@ -237,7 +238,7 @@ def request_task_implementation(task_spec: str) -> Dict[str, Any]:
         print_task_header(task_spec)
         # Run implementation agent
         from ..agent_utils import run_task_implementation_agent
-        result = run_task_implementation_agent(
+        _result = run_task_implementation_agent(
             base_task=_global_memory.get('base_task', ''),
             tasks=tasks,
             task=task_spec,
@@ -298,7 +299,7 @@ def request_implementation(task_spec: str) -> Dict[str, Any]:
     try:
         # Run planning agent
         from ..agent_utils import run_planning_agent
-        result = run_planning_agent(
+        _result = run_planning_agent(
             task_spec,
             model,
             config=config,

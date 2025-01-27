@@ -41,7 +41,7 @@ def mock_openai():
 def test_initialize_expert_defaults(clean_env, mock_openai, monkeypatch):
     """Test expert LLM initialization with default parameters."""
     monkeypatch.setenv("EXPERT_OPENAI_API_KEY", "test-key")
-    llm = initialize_expert_llm()
+    _llm = initialize_expert_llm()
     
     mock_openai.assert_called_once_with(
         api_key="test-key",
@@ -52,7 +52,7 @@ def test_initialize_expert_defaults(clean_env, mock_openai, monkeypatch):
 def test_initialize_expert_openai_custom(clean_env, mock_openai, monkeypatch):
     """Test expert OpenAI initialization with custom parameters."""
     monkeypatch.setenv("EXPERT_OPENAI_API_KEY", "test-key")
-    llm = initialize_expert_llm("openai", "gpt-4-preview")
+    _llm = initialize_expert_llm("openai", "gpt-4-preview")
     
     mock_openai.assert_called_once_with(
         api_key="test-key",
@@ -63,7 +63,7 @@ def test_initialize_expert_openai_custom(clean_env, mock_openai, monkeypatch):
 def test_initialize_expert_gemini(clean_env, mock_gemini, monkeypatch):
     """Test expert Gemini initialization."""
     monkeypatch.setenv("EXPERT_GEMINI_API_KEY", "test-key")
-    llm = initialize_expert_llm("gemini", "gemini-2.0-flash-thinking-exp-1219")
+    _llm = initialize_expert_llm("gemini", "gemini-2.0-flash-thinking-exp-1219")
     
     mock_gemini.assert_called_once_with(
         api_key="test-key",
@@ -74,7 +74,7 @@ def test_initialize_expert_gemini(clean_env, mock_gemini, monkeypatch):
 def test_initialize_expert_anthropic(clean_env, mock_anthropic, monkeypatch):
     """Test expert Anthropic initialization."""
     monkeypatch.setenv("EXPERT_ANTHROPIC_API_KEY", "test-key")
-    llm = initialize_expert_llm("anthropic", "claude-3")
+    _llm = initialize_expert_llm("anthropic", "claude-3")
     
     mock_anthropic.assert_called_once_with(
         api_key="test-key",
@@ -85,7 +85,7 @@ def test_initialize_expert_anthropic(clean_env, mock_anthropic, monkeypatch):
 def test_initialize_expert_openrouter(clean_env, mock_openai, monkeypatch):
     """Test expert OpenRouter initialization."""
     monkeypatch.setenv("EXPERT_OPENROUTER_API_KEY", "test-key")
-    llm = initialize_expert_llm("openrouter", "models/mistral-large")
+    _llm = initialize_expert_llm("openrouter", "models/mistral-large")
     
     mock_openai.assert_called_once_with(
         api_key="test-key",
@@ -98,7 +98,7 @@ def test_initialize_expert_openai_compatible(clean_env, mock_openai, monkeypatch
     """Test expert OpenAI-compatible initialization."""
     monkeypatch.setenv("EXPERT_OPENAI_API_KEY", "test-key")
     monkeypatch.setenv("EXPERT_OPENAI_API_BASE", "http://test-url")
-    llm = initialize_expert_llm("openai-compatible", "local-model")
+    _llm = initialize_expert_llm("openai-compatible", "local-model")
     
     mock_openai.assert_called_once_with(
         api_key="test-key",
@@ -130,7 +130,7 @@ def test_estimate_tokens():
 def test_initialize_openai(clean_env, mock_openai):
     """Test OpenAI provider initialization"""
     os.environ["OPENAI_API_KEY"] = "test-key"
-    model = initialize_llm("openai", "gpt-4")
+    _model = initialize_llm("openai", "gpt-4")
     
     mock_openai.assert_called_once_with(
         api_key="test-key",
@@ -140,7 +140,7 @@ def test_initialize_openai(clean_env, mock_openai):
 def test_initialize_gemini(clean_env, mock_gemini):
     """Test Gemini provider initialization"""
     os.environ["GEMINI_API_KEY"] = "test-key"
-    model = initialize_llm("gemini", "gemini-2.0-flash-thinking-exp-1219")
+    _model = initialize_llm("gemini", "gemini-2.0-flash-thinking-exp-1219")
     
     mock_gemini.assert_called_once_with(
         api_key="test-key",
@@ -150,7 +150,7 @@ def test_initialize_gemini(clean_env, mock_gemini):
 def test_initialize_anthropic(clean_env, mock_anthropic):
     """Test Anthropic provider initialization"""
     os.environ["ANTHROPIC_API_KEY"] = "test-key"
-    model = initialize_llm("anthropic", "claude-3")
+    _model = initialize_llm("anthropic", "claude-3")
     
     mock_anthropic.assert_called_once_with(
         api_key="test-key",
@@ -160,7 +160,7 @@ def test_initialize_anthropic(clean_env, mock_anthropic):
 def test_initialize_openrouter(clean_env, mock_openai):
     """Test OpenRouter provider initialization"""
     os.environ["OPENROUTER_API_KEY"] = "test-key"
-    model = initialize_llm("openrouter", "mistral-large")
+    _model = initialize_llm("openrouter", "mistral-large")
     
     mock_openai.assert_called_once_with(
         api_key="test-key",
@@ -172,7 +172,7 @@ def test_initialize_openai_compatible(clean_env, mock_openai):
     """Test OpenAI-compatible provider initialization"""
     os.environ["OPENAI_API_KEY"] = "test-key"
     os.environ["OPENAI_API_BASE"] = "https://custom-endpoint/v1"
-    model = initialize_llm("openai-compatible", "local-model")
+    _model = initialize_llm("openai-compatible", "local-model")
     
     mock_openai.assert_called_once_with(
         api_key="test-key",
@@ -299,15 +299,15 @@ def test_initialize_llm_cross_provider(clean_env, mock_openai, mock_anthropic, m
     """Test initializing different providers in sequence."""
     # Initialize OpenAI
     monkeypatch.setenv("OPENAI_API_KEY", "openai-key")
-    llm1 = initialize_llm("openai", "gpt-4")
+    _llm1 = initialize_llm("openai", "gpt-4")
     
     # Initialize Anthropic
     monkeypatch.setenv("ANTHROPIC_API_KEY", "anthropic-key") 
-    llm2 = initialize_llm("anthropic", "claude-3")
+    _llm2 = initialize_llm("anthropic", "claude-3")
     
     # Initialize Gemini
     monkeypatch.setenv("GEMINI_API_KEY", "gemini-key")
-    llm3 = initialize_llm("gemini", "gemini-2.0-flash-thinking-exp-1219")
+    _llm3 = initialize_llm("gemini", "gemini-2.0-flash-thinking-exp-1219")
     
     # Verify both were initialized correctly
     mock_openai.assert_called_once_with(
@@ -350,7 +350,7 @@ def test_environment_variable_precedence(clean_env, mock_openai, monkeypatch):
     assert config["api_key"] == "expert-key"
     
     # Test LLM client creation with expert mode
-    llm = create_llm_client("openai", "o1", is_expert=True)
+    _llm = create_llm_client("openai", "o1", is_expert=True)
     mock_openai.assert_called_with(
         api_key="expert-key",
         model="o1",
@@ -401,7 +401,7 @@ def test_initialize_deepseek(clean_env, mock_openai, mock_deepseek_reasoner, mon
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
     
     # Test with reasoner model
-    model = initialize_llm("deepseek", "deepseek-reasoner")
+    _model = initialize_llm("deepseek", "deepseek-reasoner")
     mock_deepseek_reasoner.assert_called_with(
         api_key="test-key",
         base_url="https://api.deepseek.com",
@@ -410,7 +410,7 @@ def test_initialize_deepseek(clean_env, mock_openai, mock_deepseek_reasoner, mon
     )
     
     # Test with non-reasoner model
-    model = initialize_llm("deepseek", "deepseek-chat")
+    _model = initialize_llm("deepseek", "deepseek-chat")
     mock_openai.assert_called_with(
         api_key="test-key",
         base_url="https://api.deepseek.com",
@@ -423,7 +423,7 @@ def test_initialize_expert_deepseek(clean_env, mock_openai, mock_deepseek_reason
     monkeypatch.setenv("EXPERT_DEEPSEEK_API_KEY", "test-key")
     
     # Test with reasoner model
-    model = initialize_expert_llm("deepseek", "deepseek-reasoner")
+    _model = initialize_expert_llm("deepseek", "deepseek-reasoner")
     mock_deepseek_reasoner.assert_called_with(
         api_key="test-key",
         base_url="https://api.deepseek.com",
@@ -432,7 +432,7 @@ def test_initialize_expert_deepseek(clean_env, mock_openai, mock_deepseek_reason
     )
     
     # Test with non-reasoner model
-    model = initialize_expert_llm("deepseek", "deepseek-chat")
+    _model = initialize_expert_llm("deepseek", "deepseek-chat")
     mock_openai.assert_called_with(
         api_key="test-key",
         base_url="https://api.deepseek.com",
@@ -445,7 +445,7 @@ def test_initialize_openrouter_deepseek(clean_env, mock_openai, mock_deepseek_re
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
     
     # Test with DeepSeek R1 model
-    model = initialize_llm("openrouter", "deepseek/deepseek-r1")
+    _model = initialize_llm("openrouter", "deepseek/deepseek-r1")
     mock_deepseek_reasoner.assert_called_with(
         api_key="test-key",
         base_url="https://openrouter.ai/api/v1",
@@ -454,7 +454,7 @@ def test_initialize_openrouter_deepseek(clean_env, mock_openai, mock_deepseek_re
     )
     
     # Test with non-DeepSeek model
-    model = initialize_llm("openrouter", "mistral/mistral-large")
+    _model = initialize_llm("openrouter", "mistral/mistral-large")
     mock_openai.assert_called_with(
         api_key="test-key",
         base_url="https://openrouter.ai/api/v1",
@@ -466,7 +466,7 @@ def test_initialize_expert_openrouter_deepseek(clean_env, mock_openai, mock_deep
     monkeypatch.setenv("EXPERT_OPENROUTER_API_KEY", "test-key")
     
     # Test with DeepSeek R1 model via create_llm_client
-    model = create_llm_client("openrouter", "deepseek/deepseek-r1", is_expert=True)
+    _model = create_llm_client("openrouter", "deepseek/deepseek-r1", is_expert=True)
     mock_deepseek_reasoner.assert_called_with(
         api_key="test-key",
         base_url="https://openrouter.ai/api/v1",
@@ -475,7 +475,7 @@ def test_initialize_expert_openrouter_deepseek(clean_env, mock_openai, mock_deep
     )
     
     # Test with non-DeepSeek model
-    model = create_llm_client("openrouter", "mistral/mistral-large", is_expert=True)
+    _model = create_llm_client("openrouter", "mistral/mistral-large", is_expert=True)
     mock_openai.assert_called_with(
         api_key="test-key",
         base_url="https://openrouter.ai/api/v1",
@@ -500,7 +500,7 @@ def test_deepseek_environment_fallback(clean_env, mock_deepseek_reasoner, monkey
     assert config["api_key"] == "expert-key"
     
     # Test client creation with expert key
-    model = create_llm_client("deepseek", "deepseek-reasoner", is_expert=True)
+    _model = create_llm_client("deepseek", "deepseek-reasoner", is_expert=True)
     mock_deepseek_reasoner.assert_called_with(
         api_key="expert-key",
         base_url="https://api.deepseek.com",

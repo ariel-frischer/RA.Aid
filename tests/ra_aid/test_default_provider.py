@@ -45,18 +45,6 @@ def test_default_anthropic_provider(clean_env, monkeypatch):
 
 """Unit tests for provider and model validation in research-only mode."""
 
-import pytest
-from dataclasses import dataclass
-
-
-@dataclass
-class MockArgs:
-    """Mock command line arguments."""
-    research_only: bool = False
-    provider: str = None
-    model: str = None
-    expert_provider: str = None
-
 
 TEST_CASES = [
     pytest.param(

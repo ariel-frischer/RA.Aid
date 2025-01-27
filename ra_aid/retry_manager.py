@@ -10,14 +10,6 @@ from .logging_config import get_logger
 
 T = TypeVar('T')  # Type variable for the return type
 
-"""RetryManager module for handling API retries with exponential backoff."""
-
-from typing import TypeVar
-
-
-
-T = TypeVar('T')  # Type variable for the return type
-
 class RetryManager:
     """Handles retry logic with exponential backoff for API calls."""
     
