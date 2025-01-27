@@ -2,17 +2,19 @@
 
 import logging
 import time
-from typing import Optional, TypeVar, Callable
-from anthropic import APIError, APITimeoutError, RateLimitError, InternalServerError
+from typing import Callable, Optional, TypeVar
+
+from anthropic import APIError, APITimeoutError, InternalServerError, RateLimitError
 
 from .exceptions import AgentInterrupt
 from .logging_config import get_logger
 
-T = TypeVar('T')  # Type variable for the return type
+T = TypeVar("T")  # Type variable for the return type
+
 
 class RetryManager:
     """Handles retry logic with exponential backoff for API calls."""
-    
+
     def __init__(
         self,
         max_retries: int = 20,
@@ -20,7 +22,7 @@ class RetryManager:
         logger: Optional[logging.Logger] = None,
     ):
         """Initialize RetryManager.
-        
+
         Args:
             max_retries: Maximum number of retry attempts
             base_delay: Base delay between retries in seconds
@@ -32,7 +34,7 @@ class RetryManager:
 
     def execute(self, func: Callable[[], T]) -> T:
         """Execute a function with retry logic.
-        
+
         Args:
             func: Function to execute
 
@@ -41,7 +43,7 @@ class RetryManager:
 
         Raises:
             RuntimeError: If max retries exceeded
-            KeyboardInterrupt: If interrupted 
+            KeyboardInterrupt: If interrupted
             AgentInterrupt: If agent interrupted
             Exception: Other unhandled errors
         """
@@ -65,10 +67,12 @@ class RetryManager:
 
                 if attempts >= self.max_retries:
                     self.logger.error("Max retries reached, failing: %s", str(e))
-                    raise RuntimeError(f"Max retries ({self.max_retries}) exceeded. Last error: {e}")
+                    raise RuntimeError(
+                        f"Max retries ({self.max_retries}) exceeded. Last error: {e}"
+                    )
                 attempts += 1
 
-                delay = self.base_delay * (2 ** (attempts - 1))  
+                delay = self.base_delay * (2 ** (attempts - 1))
                 self.logger.warning(
                     "API error (attempt %d/%d): %s",
                     attempts,

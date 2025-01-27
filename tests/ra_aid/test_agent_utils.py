@@ -1,20 +1,20 @@
 """Unit tests for agent_utils.py."""
 
 import time
-import pytest
-import httpx
 from unittest.mock import Mock, patch
+
+import httpx
+import pytest
+from anthropic import APIError, APITimeoutError, InternalServerError, RateLimitError
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from litellm.exceptions import NotFoundError
 
-from anthropic import APIError, APITimeoutError, RateLimitError, InternalServerError
-from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
-
 from ra_aid.agent_utils import (
-    state_modifier,
     AgentState,
     create_agent,
     get_model_token_limit,
+    state_modifier,
 )
 from ra_aid.exceptions import AgentInterrupt
 from ra_aid.models_tokens import DEFAULT_TOKEN_LIMIT, models_tokens
@@ -66,7 +66,6 @@ def test_get_model_token_limit_missing_config(mock_memory):
 
     token_limit = get_model_token_limit(config)
     assert token_limit is None
-
 
 
 def test_get_model_token_limit_litellm_success():
@@ -242,6 +241,7 @@ def mock_retry_manager():
         instance.execute = Mock()
         yield instance
 
+
 @pytest.fixture
 def mock_test_executor():
     """Fixture providing a configurable TestExecutor."""
@@ -249,6 +249,7 @@ def mock_test_executor():
         instance = mock.return_value
         instance.execute = Mock(return_value=(True, "prompt", False, 0))
         yield instance
+
 
 @pytest.fixture
 def mock_interruptible_section():
@@ -260,25 +261,27 @@ def mock_interruptible_section():
         instance.is_interrupted = Mock(return_value=False)
         yield instance
 
+
 def test_retry_manager_success():
     """Test RetryManager successfully executes function."""
     retry_manager = RetryManager(max_retries=3, base_delay=0.1)
     mock_func = Mock(return_value="success")
-    
+
     result = retry_manager.execute(mock_func)
-    
+
     assert result == "success"
     mock_func.assert_called_once()
+
 
 def test_retry_manager_retries_on_api_errors():
     """Test RetryManager retries on different API errors."""
     retry_manager = RetryManager(max_retries=3, base_delay=0.1)
-    
+
     def create_response(status_code):
         return httpx.Response(
             status_code=status_code,
             text="Error response",
-            request=httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+            request=httpx.Request("POST", "https://api.anthropic.com/v1/messages"),
         )
 
     # Test APITimeoutError separately since it has different constructor args
@@ -293,19 +296,19 @@ def test_retry_manager_retries_on_api_errors():
     # Test other error types
     def test_error(error_class, message, status_code):
         response = create_response(status_code)
-        
+
         # Handle different error types with their specific constructor requirements
         if error_class is APIError:
             error_instance = error_class(
                 message=message,
                 request=response.request,
-                body={"error": {"type": "api_error", "message": message}}
+                body={"error": {"type": "api_error", "message": message}},
             )
         elif error_class is InternalServerError or error_class is RateLimitError:
             error_instance = error_class(
                 message=message,
                 response=response,
-                body={"error": {"type": "api_error", "message": message}}
+                body={"error": {"type": "api_error", "message": message}},
             )
         mock_func = Mock(side_effect=[error_instance, "success"])
         result = retry_manager.execute(mock_func)
@@ -318,62 +321,73 @@ def test_retry_manager_retries_on_api_errors():
     test_error(RateLimitError, "Rate limit exceeded", 429)
     test_error(APIError, "API request failed", 400)
 
+
 def test_retry_manager_backoff_delay():
     """Test RetryManager implements exponential backoff."""
     retry_manager = RetryManager(max_retries=3, base_delay=0.1)
-    mock_func = Mock(side_effect=[APIError(request="test", message="Error", body="body")] * 2 + ["success"])
-    
+    mock_func = Mock(
+        side_effect=[APIError(request="test", message="Error", body="body")] * 2
+        + ["success"]
+    )
+
     start_time = time.time()
     result = retry_manager.execute(mock_func)
     elapsed_time = time.time() - start_time
-    
+
     assert result == "success"
     assert elapsed_time >= 0.3  # 0.1 + 0.2 seconds minimum
+
 
 def test_retry_manager_interrupt_handling():
     """Test RetryManager handles interrupts properly."""
     retry_manager = RetryManager(max_retries=3, base_delay=0.1)
     mock_func = Mock(side_effect=KeyboardInterrupt)
-    
+
     with pytest.raises(KeyboardInterrupt):
         retry_manager.execute(mock_func)
+
 
 def test_retry_manager_agent_interrupt():
     """Test RetryManager handles AgentInterrupt properly."""
     retry_manager = RetryManager(max_retries=3, base_delay=0.1)
     mock_func = Mock(side_effect=AgentInterrupt("Test interrupt"))
-    
+
     with pytest.raises(AgentInterrupt):
         retry_manager.execute(mock_func)
 
 
-
 def test_run_agent_with_retry_integration():
     """Test integration of run_agent_with_retry with components."""
-    from ra_aid.agent_utils import run_agent_with_retry
     from langchain_core.messages import HumanMessage
-    
+
+    from ra_aid.agent_utils import run_agent_with_retry
+
     mock_agent = Mock()
     mock_agent.stream.return_value = [{"type": "output", "content": "test"}]
-    
-    with patch("ra_aid.agent_utils.RetryManager") as mock_retry_mgr, \
-         patch("ra_aid.agent_utils.TestExecutor") as mock_test_exec, \
-         patch("ra_aid.agent_utils.InterruptibleSection") as mock_section, \
-         patch("ra_aid.agent_utils._global_memory") as mock_memory:
-        
+
+    with (
+        patch("ra_aid.agent_utils.RetryManager") as mock_retry_mgr,
+        patch("ra_aid.agent_utils.TestExecutor") as mock_test_exec,
+        patch("ra_aid.agent_utils.InterruptibleSection") as mock_section,
+        patch("ra_aid.agent_utils._global_memory") as mock_memory,
+    ):
         # Set up mocks
         mock_retry_mgr.return_value.execute.side_effect = lambda f: f()
         mock_test_exec.return_value.execute.return_value = (True, "prompt", False, 0)
-        mock_section.return_value.__enter__.return_value.is_interrupted.return_value = False
+        mock_section.return_value.__enter__.return_value.is_interrupted.return_value = (
+            False
+        )
         mock_memory.get.return_value = 0
-        
-        result = run_agent_with_retry(mock_agent, "test prompt", {"test_cmd": "echo test"})
-        
+
+        result = run_agent_with_retry(
+            mock_agent, "test prompt", {"test_cmd": "echo test"}
+        )
+
         # Verify interactions
         assert result == "Agent run completed successfully"
         mock_agent.stream.assert_called_once_with(
             {"messages": [HumanMessage(content="test prompt")]},
-            {"test_cmd": "echo test"}
+            {"test_cmd": "echo test"},
         )
 
 

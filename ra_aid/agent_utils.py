@@ -3,61 +3,57 @@
 import signal
 import threading
 import uuid
-from typing import Optional, Any, List, Dict, Sequence, TypeVar
+from typing import Any, Dict, List, Optional, Sequence, TypeVar
 
-from langgraph.checkpoint.memory import MemorySaver
-from langgraph.prebuilt.chat_agent_executor import AgentState
-from langchain_core.messages import BaseMessage, HumanMessage, trim_messages
-from litellm import get_model_info
 import litellm
-
-from ra_aid.agents.ciayn_agent import CiaynAgent
-from ra_aid.config import DEFAULT_RECURSION_LIMIT
-from ra_aid.models_tokens import DEFAULT_TOKEN_LIMIT, models_tokens
-from ra_aid.retry_manager import RetryManager
-from ra_aid.test_executor import TestExecutor
-from ra_aid.interruptible_section import InterruptibleSection, _request_interrupt
-
-from ra_aid.project_info import (
-    get_project_info,
-    format_project_info,
-    display_project_status,
-)
-
-from langgraph.prebuilt import create_react_agent
-from ra_aid.console.formatting import print_stage_header
 from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import BaseMessage, HumanMessage, trim_messages
 from langchain_core.tools import tool
-from ra_aid.console.output import print_agent_output
-from ra_aid.logging_config import get_logger
-from ra_aid.exceptions import AgentInterrupt
-from ra_aid.tool_configs import (
-    get_implementation_tools,
-    get_research_tools,
-    get_planning_tools,
-    get_web_research_tools,
-)
-from ra_aid.prompts import (
-    IMPLEMENTATION_PROMPT,
-    EXPERT_PROMPT_SECTION_IMPLEMENTATION,
-    HUMAN_PROMPT_SECTION_IMPLEMENTATION,
-    EXPERT_PROMPT_SECTION_RESEARCH,
-    WEB_RESEARCH_PROMPT_SECTION_RESEARCH,
-    WEB_RESEARCH_PROMPT_SECTION_CHAT,
-    WEB_RESEARCH_PROMPT_SECTION_PLANNING,
-    RESEARCH_PROMPT,
-    RESEARCH_ONLY_PROMPT,
-    HUMAN_PROMPT_SECTION_RESEARCH,
-    PLANNING_PROMPT,
-    EXPERT_PROMPT_SECTION_PLANNING,
-    HUMAN_PROMPT_SECTION_PLANNING,
-    WEB_RESEARCH_PROMPT,
-)
-
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.prebuilt import create_react_agent
+from langgraph.prebuilt.chat_agent_executor import AgentState
+from litellm import get_model_info
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 
+from ra_aid.agents.ciayn_agent import CiaynAgent
+from ra_aid.config import DEFAULT_RECURSION_LIMIT
+from ra_aid.console.formatting import print_stage_header
+from ra_aid.console.output import print_agent_output
+from ra_aid.exceptions import AgentInterrupt
+from ra_aid.interruptible_section import InterruptibleSection, _request_interrupt
+from ra_aid.logging_config import get_logger
+from ra_aid.models_tokens import DEFAULT_TOKEN_LIMIT, models_tokens
+from ra_aid.project_info import (
+    display_project_status,
+    format_project_info,
+    get_project_info,
+)
+from ra_aid.prompts import (
+    EXPERT_PROMPT_SECTION_IMPLEMENTATION,
+    EXPERT_PROMPT_SECTION_PLANNING,
+    EXPERT_PROMPT_SECTION_RESEARCH,
+    HUMAN_PROMPT_SECTION_IMPLEMENTATION,
+    HUMAN_PROMPT_SECTION_PLANNING,
+    HUMAN_PROMPT_SECTION_RESEARCH,
+    IMPLEMENTATION_PROMPT,
+    PLANNING_PROMPT,
+    RESEARCH_ONLY_PROMPT,
+    RESEARCH_PROMPT,
+    WEB_RESEARCH_PROMPT,
+    WEB_RESEARCH_PROMPT_SECTION_CHAT,
+    WEB_RESEARCH_PROMPT_SECTION_PLANNING,
+    WEB_RESEARCH_PROMPT_SECTION_RESEARCH,
+)
+from ra_aid.retry_manager import RetryManager
+from ra_aid.test_executor import TestExecutor
+from ra_aid.tool_configs import (
+    get_implementation_tools,
+    get_planning_tools,
+    get_research_tools,
+    get_web_research_tools,
+)
 from ra_aid.tools.memory import (
     _global_memory,
     get_memory_value,

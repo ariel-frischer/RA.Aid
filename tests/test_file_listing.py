@@ -1,14 +1,15 @@
 """Tests for file listing functionality."""
 
 import os
-import pytest
 import subprocess
 
+import pytest
+
 from ra_aid.file_listing import (
+    DirectoryAccessError,
+    DirectoryNotFoundError,
     get_file_listing,
     is_git_repo,
-    DirectoryNotFoundError,
-    DirectoryAccessError
 )
 
 
@@ -28,25 +29,27 @@ def sample_git_repo(empty_git_repo):
         "src/main.py",
         "src/utils.py",
         "tests/test_main.py",
-        "docs/index.html"
+        "docs/index.html",
     ]
-    
+
     for file_path in files:
         full_path = empty_git_repo / file_path
         full_path.parent.mkdir(parents=True, exist_ok=True)
         full_path.write_text(f"Content of {file_path}")
-    
+
     # Add and commit files
     subprocess.run(["git", "add", "."], cwd=empty_git_repo)
     subprocess.run(
         ["git", "commit", "-m", "Initial commit"],
         cwd=empty_git_repo,
-        env={"GIT_AUTHOR_NAME": "Test", 
-             "GIT_AUTHOR_EMAIL": "test@example.com",
-             "GIT_COMMITTER_NAME": "Test",
-             "GIT_COMMITTER_EMAIL": "test@example.com"}
+        env={
+            "GIT_AUTHOR_NAME": "Test",
+            "GIT_AUTHOR_EMAIL": "test@example.com",
+            "GIT_COMMITTER_NAME": "Test",
+            "GIT_COMMITTER_EMAIL": "test@example.com",
+        },
     )
-    
+
     return empty_git_repo
 
 
@@ -101,7 +104,7 @@ def test_file_as_directory(tmp_path):
     """Test handling of file path instead of directory."""
     test_file = tmp_path / "test.txt"
     test_file.write_text("test")
-    
+
     with pytest.raises(DirectoryNotFoundError):
         get_file_listing(str(test_file))
 
@@ -112,7 +115,7 @@ def test_permission_error(tmp_path):
     try:
         # Make directory unreadable
         os.chmod(tmp_path, 0o000)
-        
+
         with pytest.raises(DirectoryAccessError):
             get_file_listing(str(tmp_path))
     finally:

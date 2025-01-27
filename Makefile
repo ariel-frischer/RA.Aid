@@ -18,6 +18,11 @@ check:
 fix:
 	ruff check --fix
 
+fix-all:
+	ruff check . --select I --fix # First sort imports
+	ruff format .
+	ruff check --fix
+
 setup-dev:
 	pip install -e ".[dev]"
 

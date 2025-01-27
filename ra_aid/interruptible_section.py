@@ -2,7 +2,7 @@
 
 import sys
 import threading
-from typing import Optional, Any, Type
+from typing import Any, Optional, Type
 
 from ra_aid.exceptions import AgentInterrupt
 
