@@ -1,3 +1,5 @@
+import shlex
+import subprocess
 from typing import Dict, Union
 
 from langchain_core.tools import tool
@@ -6,11 +8,12 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 
 from ra_aid.console.cowboy_messages import get_cowboy_message
-from ra_aid.proc.interactive import run_interactive_command
 from ra_aid.text.processing import truncate_output
 from ra_aid.tools.memory import _global_memory
+from ra_aid.tools.shell_security import SecurityConfig, ShellSecurityValidator
 
 console = Console()
+security_validator = ShellSecurityValidator()
 
 
 @tool
@@ -30,6 +33,22 @@ def run_shell_command(command: str) -> Dict[str, Union[str, int, bool]]:
     3. Avoid doing recursive lists, finds, etc. that could be slow and have a ton of output. Likewise, avoid flags like '-l' that needlessly increase the output. But if you really need to, you can.
     4. Add flags e.g. git --no-pager in order to reduce interaction required by the human.
     """
+    # Configure security validator if custom settings exist
+    security_config = _global_memory.get("config", {}).get("shell_security")
+    if security_config:
+        security_validator.configure(SecurityConfig(**security_config))
+
+    # Validate command security
+    try:
+        security_validator.validate_command(command)
+    except ValueError as e:
+        console.print(Panel(str(e), title="🚫 Security Error", border_style="red"))
+        return {
+            "output": f"Security validation failed: {str(e)}",
+            "return_code": 1,
+            "success": False,
+        }
+
     # Check if we need approval
     cowboy_mode = _global_memory.get("config", {}).get("cowboy_mode", False)
 
@@ -66,12 +85,18 @@ def run_shell_command(command: str) -> Dict[str, Union[str, int, bool]]:
 
     try:
         print()
-        output, return_code = run_interactive_command(["/bin/bash", "-c", command])
+        # Use subprocess.run with shlex.split for safer command execution
+        result = subprocess.run(
+            shlex.split(command),
+            capture_output=True,
+            text=True,
+            check=False
+        )
         print()
         return {
-            "output": truncate_output(output.decode()) if output else "",
-            "return_code": return_code,
-            "success": return_code == 0,
+            "output": truncate_output(result.stdout + result.stderr),
+            "return_code": result.returncode,
+            "success": result.returncode == 0,
         }
     except Exception as e:
         print()

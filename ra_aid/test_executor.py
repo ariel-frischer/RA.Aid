@@ -37,6 +37,8 @@ class TestExecutor:
             "max_test_cmd_retries", DEFAULT_MAX_TEST_CMD_RETRIES
         )
         self.auto_test = config.get("auto_test", False)
+        print(f"test_cmd={self.test_cmd}")
+        print(f"auto_test={self.auto_test}")
 
     def display_test_failure(self, attempts: int) -> None:
         """Display test failure message.
@@ -145,6 +147,7 @@ class TestExecutor:
             - bool: Updated auto_test flag
             - int: Updated test attempts count
         """
+        print("RUNNING test executor!")
         state = TestState(
             prompt=original_prompt,
             test_attempts=test_attempts,
@@ -153,6 +156,7 @@ class TestExecutor:
 
         if not self.test_cmd:
             state.should_break = True
+            print(f"should_break={self.should_break}")
             return (
                 state.should_break,
                 state.prompt,
@@ -168,6 +172,7 @@ class TestExecutor:
             state = self.handle_user_response(response, state)
         else:
             if self.check_max_retries(test_attempts):
+                print("BREAKING EARLY")
                 state.should_break = True
             else:
                 state = self.run_test_command(state)
