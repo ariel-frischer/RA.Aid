@@ -2,6 +2,7 @@
 
 import signal
 import threading
+from unittest import mock
 from unittest.mock import Mock, patch
 
 import pytest
@@ -89,8 +90,24 @@ def test_agent_runner_with_test_integration(
     assert agent_runner.test_attempts == 1
     assert agent_runner.current_prompt == "updated prompt"
 
-    # Verify retry manager was called
-    mock_retry_manager.execute.assert_called_once()
+    # Verify retry manager was called twice - once with initial prompt, once with updated prompt
+    assert mock_retry_manager.execute.call_count == 2
+    mock_retry_manager.execute.assert_has_calls([
+        mock.call(
+            agent_runner._run_agent_iteration,
+            agent_runner.agent,
+            "test prompt",
+            agent_runner.config,
+            agent_runner._interrupt_section
+        ),
+        mock.call(
+            agent_runner._run_agent_iteration,
+            agent_runner.agent,
+            "updated prompt",
+            agent_runner.config,
+            agent_runner._interrupt_section
+        )
+    ])
 
 
 def test_agent_runner_interrupt_handling(agent_runner, mock_retry_manager):
