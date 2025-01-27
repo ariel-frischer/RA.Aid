@@ -372,7 +372,7 @@ def test_run_agent_with_retry_integration():
         patch("ra_aid.agent_utils._global_memory") as mock_memory,
     ):
         # Set up mocks
-        mock_retry_mgr.return_value.execute.side_effect = lambda f: f()
+        mock_retry_mgr.return_value.execute.side_effect = lambda f, *args, **kwargs: f(*args, **kwargs)
         mock_test_exec.return_value.execute.return_value = (True, "prompt", False, 0)
         mock_section.return_value.__enter__.return_value.is_interrupted.return_value = (
             False

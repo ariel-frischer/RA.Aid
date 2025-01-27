@@ -672,6 +672,76 @@ def run_task_implementation_agent(
         raise
 
 
+def _check_interruption(section: InterruptibleSection) -> None:
+    """Check if execution has been interrupted.
+
+    Args:
+        section: InterruptibleSection instance for interrupt handling
+
+    Raises:
+        AgentInterrupt: If execution is interrupted
+    """
+    if section.is_interrupted():
+        raise AgentInterrupt("Agent execution interrupted")
+
+
+def _process_chunk(chunk: Dict[str, Any]) -> None:
+    """Process a single chunk of agent output.
+
+    Args:
+        chunk: Output chunk from the agent
+    """
+    logger.debug("Agent output: %s", chunk)
+    print_agent_output(chunk)
+
+
+def _check_completion_state() -> bool:
+    """Check if any completion states are set.
+
+    Returns:
+        bool: True if a completion state was handled, False otherwise
+    """
+    if _global_memory.get("plan_completed"):
+        _global_memory.update(
+            {
+                "plan_completed": False,
+                "task_completed": False,
+                "completion_message": "",
+            }
+        )
+        return True
+
+    if _global_memory.get("task_completed"):
+        _global_memory.update({"task_completed": False, "completion_message": ""})
+        return True
+
+    return False
+
+
+def run_agent_iteration(
+    agent, prompt: str, config: dict, section: InterruptibleSection
+) -> bool:
+    """Run one iteration of the agent.
+
+    Args:
+        agent: The agent instance to run
+        prompt: The prompt to send to the agent
+        config: Configuration dictionary
+        section: InterruptibleSection instance for interrupt handling
+
+    Returns:
+        bool: True if iteration completed successfully, False otherwise
+    """
+    for chunk in agent.stream({"messages": [HumanMessage(content=prompt)]}, config):
+        _check_interruption(section)
+        _process_chunk(chunk)
+
+        if _check_completion_state():
+            return True
+
+    return False
+
+
 def run_agent_with_retry(agent, prompt: str, config: dict) -> Optional[str]:
     """Run an agent with retry logic for API errors and test execution.
 
@@ -704,47 +774,20 @@ def run_agent_with_retry(agent, prompt: str, config: dict) -> Optional[str]:
     original_prompt = prompt
     test_attempts = 0
 
-    with InterruptibleSection() as section:
+    with InterruptibleSection() as _section:
         try:
             # Track agent execution depth
             current_depth = _global_memory.get("agent_depth", 0)
             _global_memory["agent_depth"] = current_depth + 1
 
-            def run_agent_iteration():
-                """Run one iteration of the agent."""
-                for chunk in agent.stream(
-                    {"messages": [HumanMessage(content=prompt)]}, config
-                ):
-                    if section.is_interrupted():
-                        raise AgentInterrupt("Agent execution interrupted")
-
-                    logger.debug("Agent output: %s", chunk)
-                    print_agent_output(chunk)
-
-                    # Check completion states
-                    if _global_memory.get("plan_completed"):
-                        _global_memory.update(
-                            {
-                                "plan_completed": False,
-                                "task_completed": False,
-                                "completion_message": "",
-                            }
-                        )
-                        return True
-
-                    if _global_memory.get("task_completed"):
-                        _global_memory.update(
-                            {"task_completed": False, "completion_message": ""}
-                        )
-                        return True
-                return False
-
             while True:
-                should_break = retry_manager.execute(run_agent_iteration)
+                should_break = retry_manager.execute(
+                    run_agent_iteration, agent, prompt, config, _section
+                )
                 if should_break:
                     break
 
-                continue_execution, prompt, auto_test, test_attempts = (
+                continue_execution, prompt, _auto_test, test_attempts = (
                     test_executor.execute(test_attempts, original_prompt)
                 )
                 if not continue_execution:

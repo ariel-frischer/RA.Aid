@@ -13,7 +13,7 @@ from ra_aid.env import validate_environment
 class MockArgs:
     """Mock arguments for testing."""
 
-    provider: str
+    provider: Optional[str] = None
     expert_provider: Optional[str] = None
     model: Optional[str] = None
     expert_model: Optional[str] = None

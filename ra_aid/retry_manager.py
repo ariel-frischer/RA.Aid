@@ -32,11 +32,13 @@ class RetryManager:
         self.base_delay = base_delay
         self.logger = logger or get_logger(__name__)
 
-    def execute(self, func: Callable[[], T]) -> T:
+    def execute(self, func: Callable[..., T], *args, **kwargs) -> T:
         """Execute a function with retry logic.
 
         Args:
             func: Function to execute
+            *args: Positional arguments for the function
+            **kwargs: Keyword arguments for the function
 
         Returns:
             Result from the function
@@ -50,6 +52,8 @@ class RetryManager:
         attempts = 0
         while True:
             try:
+                if args or kwargs:
+                    return func(*args, **kwargs)
                 return func()
             except (KeyboardInterrupt, AgentInterrupt):
                 raise
