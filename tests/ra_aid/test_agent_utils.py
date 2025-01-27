@@ -365,14 +365,11 @@ def test_run_agent_with_retry_integration():
     test_config = {"test_cmd": "echo test"}
 
     with patch("ra_aid.agent_runner.AgentRunner") as MockAgentRunner:
-        # Configure mock
         mock_runner = MockAgentRunner.return_value
         mock_runner.run.return_value = "Agent run completed successfully"
 
-        # Run the function
         result = run_agent_with_retry(mock_agent, test_prompt, test_config)
 
-        # Verify AgentRunner was created and run with correct args
         MockAgentRunner.assert_called_once_with(mock_agent, test_prompt, test_config)
         mock_runner.run.assert_called_once()
         assert result == "Agent run completed successfully"

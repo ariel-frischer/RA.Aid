@@ -145,6 +145,7 @@ class TestExecutor:
             - bool: Updated auto_test flag
             - int: Updated test attempts count
         """
+        print('TEST Executor execute!')
         state = TestState(
             prompt=original_prompt,
             test_attempts=test_attempts,

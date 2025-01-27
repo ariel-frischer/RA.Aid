@@ -12,6 +12,7 @@ from ra_aid.exceptions import AgentInterrupt
 from ra_aid.interruptible_section import InterruptibleSection
 from ra_aid.retry_manager import RetryManager
 from ra_aid.test_executor import TestExecutor
+from ra_aid.agents.output_summarizer import OutputSummarizer
 
 
 @pytest.fixture
@@ -37,16 +38,32 @@ def mock_test_executor():
 
 
 @pytest.fixture
-def agent_runner(mock_agent, mock_retry_manager, mock_test_executor):
+def mock_summarizer():
+    """Fixture providing a mock OutputSummarizer."""
+    summarizer = Mock(spec=OutputSummarizer)
+    summarizer._generate_suggestions.return_value = ["Suggestion 1", "Suggestion 2"]
+    return summarizer
+
+
+@pytest.fixture
+def agent_runner(mock_agent, mock_retry_manager, mock_test_executor, mock_summarizer):
     """Fixture providing a configured AgentRunner instance."""
-    config = {"test_key": "test_value"}
-    return AgentRunner(
+    config = {
+        "test_key": "test_value",
+        "summarizer": {
+            "model": "claude-3-haiku-20240307",
+            "use_redis": False
+        }
+    }
+    runner = AgentRunner(
         mock_agent,
         "test prompt",
         config,
         retry_manager=mock_retry_manager,
         test_executor=mock_test_executor,
     )
+    runner.output_summarizer = mock_summarizer
+    return runner
 
 
 def test_agent_runner_initialization(agent_runner):
@@ -128,6 +145,95 @@ def test_agent_runner_signal_handling(agent_runner):
 
         # Verify signal handler was restored
         assert signal.getsignal(signal.SIGINT) == original_handler
+
+
+def test_process_shell_output(agent_runner, mock_summarizer):
+    """Test processing of shell command output chunks."""
+    shell_output = {
+        'tools': {
+            'messages': [
+                Mock(content="ls: command output")
+            ]
+        }
+    }
+    
+    agent_runner._process_chunk(shell_output)
+    
+    mock_summarizer._generate_suggestions.assert_called_once_with("ls: command output")
+    mock_summarizer._cache_set.assert_called_once()
+
+
+def test_process_empty_shell_output(agent_runner, mock_summarizer):
+    """Test processing of empty shell command output."""
+    shell_output = {
+        'tools': {
+            'messages': [
+                Mock(content="")
+            ]
+        }
+    }
+    
+    agent_runner._process_chunk(shell_output)
+    mock_summarizer._generate_suggestions.assert_not_called()
+
+
+def test_process_non_shell_output(agent_runner, mock_summarizer):
+    """Test processing of non-shell output chunks."""
+    regular_output = {
+        "agent": {
+            "messages": ["Regular agent message"]
+        }
+    }
+    
+    agent_runner._process_chunk(regular_output)
+    mock_summarizer._generate_suggestions.assert_not_called()
+
+
+def test_cache_output_pattern_success(agent_runner, mock_summarizer):
+    """Test successful caching of output patterns."""
+    output = "test output"
+    summary = ["Suggestion 1", "Suggestion 2"]
+    
+    agent_runner._cache_output_pattern(output, summary)
+    
+    mock_summarizer._cache_set.assert_called_once()
+    args = mock_summarizer._cache_set.call_args[0]
+    assert len(args) == 2
+    assert isinstance(args[0], str)
+    assert args[1] == summary
+
+
+def test_cache_output_pattern_error(agent_runner, mock_summarizer):
+    """Test error handling in output pattern caching."""
+    mock_summarizer._cache_set.side_effect = Exception("Cache error")
+    
+    # Should not raise exception
+    agent_runner._cache_output_pattern("test output", ["suggestion"])
+    
+    mock_summarizer._cache_set.assert_called_once()
+
+
+def test_summarizer_initialization(mock_agent, mock_retry_manager, mock_test_executor):
+    """Test OutputSummarizer initialization with different configs."""
+    config = {
+        "summarizer": {
+            "model": "test-model",
+            "use_redis": True,
+            "redis_config": {"host": "localhost"}
+        }
+    }
+    
+    runner = AgentRunner(
+        mock_agent,
+        "test prompt",
+        config,
+        retry_manager=mock_retry_manager,
+        test_executor=mock_test_executor
+    )
+    
+    assert isinstance(runner.output_summarizer, OutputSummarizer)
+    assert runner.output_summarizer.model == "test-model"
+    assert runner.output_summarizer.use_redis
 
 
 def test_agent_runner_completion_state(agent_runner, mock_retry_manager):
