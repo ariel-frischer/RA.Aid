@@ -60,7 +60,7 @@ def get_project_info(directory: str, file_limit: Optional[int] = None) -> Projec
             total_files=total
         )
         
-    except (ProjectStateError, FileListerError) as e:
+    except (ProjectStateError, FileListerError):
         # Re-raise known errors
         raise
     except Exception as e:

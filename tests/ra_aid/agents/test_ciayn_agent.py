@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 from langchain_core.messages import HumanMessage, AIMessage
 from ra_aid.agents.ciayn_agent import CiaynAgent
 from ra_aid.agents.ciayn_agent import validate_function_call_pattern

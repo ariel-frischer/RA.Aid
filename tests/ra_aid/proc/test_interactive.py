@@ -1,7 +1,6 @@
 """Tests for the interactive subprocess module."""
 
 import os
-import sys
 import pytest
 import tempfile
 from ra_aid.proc.interactive import run_interactive_command

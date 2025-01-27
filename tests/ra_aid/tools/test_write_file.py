@@ -1,7 +1,6 @@
 import os
 import pytest
-from pathlib import Path
-from unittest.mock import patch, mock_open
+from unittest.mock import patch
 from ra_aid.tools.write_file import write_file_tool
 
 @pytest.fixture

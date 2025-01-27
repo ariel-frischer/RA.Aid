@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from ra_aid.tools.shell import run_shell_command
 from ra_aid.tools.memory import _global_memory
 

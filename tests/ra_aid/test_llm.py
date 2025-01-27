@@ -285,7 +285,7 @@ def test_provider_name_validation():
     providers = ["openai", "anthropic", "openrouter", "openai-compatible", "gemini"]
     for provider in providers:
         try:
-            with patch(f'ra_aid.llm.ChatOpenAI'), patch('ra_aid.llm.ChatAnthropic'):
+            with patch('ra_aid.llm.ChatOpenAI'), patch('ra_aid.llm.ChatAnthropic'):
                 initialize_llm(provider, "test-model")
         except ValueError:
             pytest.fail(f"Valid provider {provider} raised ValueError")

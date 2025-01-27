@@ -1,10 +1,10 @@
-"""Tests for test execution utilities."""
+"""Tests for TestExecutor class."""
 
 import pytest
-from unittest.mock import Mock, patch
-from ra_aid.tools.handle_user_defined_test_cmd_execution import execute_test_command
+from unittest.mock import patch
+from ra_aid.test_executor import TestExecutor
 
-# Test cases for execute_test_command
+# Test cases for TestExecutor
 test_cases = [
     # Format: (name, config, original_prompt, test_attempts, auto_test,
     #          mock_responses, expected_result)
@@ -139,7 +139,7 @@ test_cases = [
     test_cases,
     ids=[case[0] for case in test_cases]
 )
-def test_execute_test_command(
+def test_test_executor(
     name: str,
     config: dict,
     original_prompt: str,
@@ -148,7 +148,7 @@ def test_execute_test_command(
     mock_responses: dict,
     expected: tuple,
 ) -> None:
-    """Test execute_test_command with different scenarios.
+    """Test TestExecutor with different scenarios.
     
     Args:
         name: Test case name
@@ -159,34 +159,33 @@ def test_execute_test_command(
         mock_responses: Mock response data
         expected: Expected result tuple
     """
-    with patch("ra_aid.tools.handle_user_defined_test_cmd_execution.ask_human") as mock_ask_human, \
-         patch("ra_aid.tools.handle_user_defined_test_cmd_execution.run_shell_command") as mock_run_cmd, \
-         patch("ra_aid.tools.handle_user_defined_test_cmd_execution.console") as mock_console, \
-         patch("ra_aid.tools.handle_user_defined_test_cmd_execution.logger") as mock_logger:
+    with patch("ra_aid.test_executor.ask_human") as mock_ask_human, \
+         patch("ra_aid.test_executor.run_shell_command") as mock_run_cmd, \
+         patch("ra_aid.test_executor.console") as mock_console, \
+         patch("ra_aid.test_executor.logger") as mock_logger:
         
         # Configure mocks based on mock_responses
         if "ask_human_response" in mock_responses:
-            mock_ask_human.invoke.return_value = mock_responses["ask_human_response"]
+            mock_ask_human.return_value = mock_responses["ask_human_response"]
         
         if "shell_cmd_result_error" in mock_responses:
             mock_run_cmd.side_effect = mock_responses["shell_cmd_result_error"]
         elif "shell_cmd_result" in mock_responses:
             mock_run_cmd.return_value = mock_responses["shell_cmd_result"]
         
+        # Create TestExecutor instance
+        executor = TestExecutor(config)
+        executor.auto_test = auto_test
+        
         # Execute test command
-        result = execute_test_command(
-            config,
-            original_prompt,
-            test_attempts,
-            auto_test
-        )
+        result = executor.execute(test_attempts, original_prompt)
         
         # Verify result matches expected
         assert result == expected, f"Test case '{name}' failed"
         
         # Verify mock interactions
         if config.get("test_cmd") and not auto_test:
-            mock_ask_human.invoke.assert_called_once()
+            mock_ask_human.assert_called_once()
         
         if auto_test and test_attempts < config.get("max_test_cmd_retries", 5):
             if config.get("test_cmd"):
@@ -196,22 +195,21 @@ def test_execute_test_command(
         if test_attempts >= config.get("max_test_cmd_retries", 5):
             mock_logger.warning.assert_called_once_with("Max test retries reached")
 
-def test_execute_test_command_error_handling() -> None:
-    """Test error handling in execute_test_command."""
+def test_test_executor_error_handling() -> None:
+    """Test error handling in TestExecutor."""
     config = {"test_cmd": "pytest"}
     
-    with patch("ra_aid.tools.handle_user_defined_test_cmd_execution.run_shell_command") as mock_run_cmd, \
-         patch("ra_aid.tools.handle_user_defined_test_cmd_execution.logger") as mock_logger:
+    with patch("ra_aid.test_executor.run_shell_command") as mock_run_cmd, \
+         patch("ra_aid.test_executor.logger") as mock_logger:
+        
+        # Create TestExecutor instance
+        executor = TestExecutor(config)
+        executor.auto_test = True
         
         # Simulate run_shell_command raising an exception
         mock_run_cmd.side_effect = Exception("Command failed")
         
-        result = execute_test_command(
-            config,
-            "original prompt",
-            0,
-            True
-        )
+        result = executor.execute(0, "original prompt")
         
         # Should handle error and continue
         assert result == (True, "original prompt", True, 1)

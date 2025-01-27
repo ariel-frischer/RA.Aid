@@ -2,7 +2,6 @@
 
 import pytest
 from dataclasses import dataclass
-from typing import List
 from ra_aid.env import validate_environment
 
 @dataclass

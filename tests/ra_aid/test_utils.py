@@ -1,6 +1,5 @@
 """Tests for utility functions."""
 
-import pytest
 from ra_aid.text.processing import truncate_output
 
 

@@ -1,7 +1,5 @@
-import os
 import pytest
-from pathlib import Path
-from unittest.mock import patch, mock_open
+from unittest.mock import patch
 from ra_aid.tools.expert import read_files_with_limit, emit_expert_context, expert_context
 
 @pytest.fixture

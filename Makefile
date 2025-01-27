@@ -1,4 +1,4 @@
-.PHONY: test setup-dev setup-hooks check fix help
+.PHONY: test pytest setup-dev setup-hooks check fix help
 
 help:
 	@echo "Available commands:"

@@ -2,7 +2,6 @@
 
 from langchain_core.tools import tool
 from typing import Dict, Any, Union, List
-from typing_extensions import TypeAlias
 from ..agent_utils import AgentInterrupt
 from ra_aid.exceptions import AgentInterrupt
 ResearchResult = Dict[str, Union[str, bool, Dict[int, Any], List[Any], None]]

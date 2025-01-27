@@ -341,7 +341,6 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    from datasets import load_dataset
 
     # Create base/log dirs and set up logging
     base_dir, log_dir = create_output_dirs()
@@ -389,6 +388,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\nOperation cancelled by user.")
         sys.exit(1)
-    except Exception as e:
+    except Exception:
         logging.exception("Unhandled error occurred.")
         sys.exit(1)

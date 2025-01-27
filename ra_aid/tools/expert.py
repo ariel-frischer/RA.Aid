@@ -52,7 +52,7 @@ def emit_expert_context(context: str) -> str:
     panel_content = f"Added expert context ({len(context)} characters)"
     console.print(Panel(panel_content, title="Expert Context", border_style="blue"))
     
-    return f"Context added."
+    return "Context added."
 
 def read_files_with_limit(file_paths: List[str], max_lines: int = 10000) -> str:
     """Read multiple files and concatenate contents, stopping at line limit.

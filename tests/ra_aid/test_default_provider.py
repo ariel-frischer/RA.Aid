@@ -1,6 +1,5 @@
 """Tests for default provider and model configuration."""
 
-import os
 import pytest
 from dataclasses import dataclass
 from typing import Optional
@@ -48,8 +47,6 @@ def test_default_anthropic_provider(clean_env, monkeypatch):
 
 import pytest
 from dataclasses import dataclass
-from argparse import Namespace
-from ra_aid.env import validate_environment
 
 
 @dataclass

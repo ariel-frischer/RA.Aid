@@ -2,7 +2,6 @@
 
 import os
 import pytest
-from pathlib import Path
 
 from ra_aid.project_state import (
     is_new_project,

@@ -1,4 +1,3 @@
-import pytest
 from ra_aid.console.cowboy_messages import get_cowboy_message, COWBOY_MESSAGES
 
 def test_get_cowboy_message_returns_string():

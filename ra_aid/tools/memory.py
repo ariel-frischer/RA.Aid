@@ -249,7 +249,7 @@ def emit_key_snippets(snippets: List[SnippetInfo]) -> str:
 
         # Format display text as markdown
         display_text = [
-            f"**Source Location**:",
+            "**Source Location**:",
             f"- File: `{snippet_info['filepath']}`",
             f"- Line: `{snippet_info['line_number']}`",
             "",  # Empty line before code block

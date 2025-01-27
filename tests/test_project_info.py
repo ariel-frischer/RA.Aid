@@ -3,15 +3,12 @@
 import os
 import subprocess
 import pytest
-from pathlib import Path
 
 from ra_aid.project_info import (
     get_project_info,
-    ProjectInfo,
-    ProjectInfoError
+    ProjectInfo
 )
 from ra_aid.project_state import DirectoryNotFoundError, DirectoryAccessError
-from ra_aid.file_listing import GitCommandError
 
 
 @pytest.fixture

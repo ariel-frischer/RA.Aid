@@ -2,16 +2,13 @@
 
 import os
 import pytest
-from pathlib import Path
 import subprocess
 
 from ra_aid.file_listing import (
     get_file_listing,
     is_git_repo,
     DirectoryNotFoundError,
-    DirectoryAccessError,
-    GitCommandError,
-    FileListerError
+    DirectoryAccessError
 )
 
 

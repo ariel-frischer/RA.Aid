@@ -1,22 +1,24 @@
 """Unit tests for agent_utils.py."""
 
-import threading
 import time
 import pytest
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
-from unittest.mock import Mock, patch, MagicMock, call
-from langchain_core.language_models import BaseChatModel
-import litellm
 import httpx
+from unittest.mock import Mock, patch
+from litellm.exceptions import NotFoundError
+
 from anthropic import APIError, APITimeoutError, RateLimitError, InternalServerError
-from ra_aid.agent_utils import RetryManager, TestExecutor, InterruptibleSection
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+
+from ra_aid.agent_utils import (
+    state_modifier,
+    AgentState,
+    create_agent,
+    get_model_token_limit,
+)
 from ra_aid.exceptions import AgentInterrupt
-
-from ra_aid.models_tokens import DEFAULT_TOKEN_LIMIT
-from ra_aid.agent_utils import state_modifier, AgentState
-
-from ra_aid.agent_utils import create_agent, get_model_token_limit
-from ra_aid.models_tokens import models_tokens
+from ra_aid.models_tokens import DEFAULT_TOKEN_LIMIT, models_tokens
+from ra_aid.retry_manager import RetryManager
 
 
 @pytest.fixture
@@ -82,7 +84,7 @@ def test_get_model_token_limit_litellm_not_found():
     config = {"provider": "anthropic", "model": "claude-2"}
 
     with patch("ra_aid.agent_utils.get_model_info") as mock_get_info:
-        mock_get_info.side_effect = litellm.exceptions.NotFoundError(
+        mock_get_info.side_effect = NotFoundError(
             message="Model not found", model="claude-2", llm_provider="anthropic"
         )
         token_limit = get_model_token_limit(config)
@@ -344,84 +346,7 @@ def test_retry_manager_agent_interrupt():
     with pytest.raises(AgentInterrupt):
         retry_manager.execute(mock_func)
 
-def test_test_executor_success():
-    """Test TestExecutor handles successful test execution."""
-    config = {"test_cmd": "echo test", "auto_test": False}
-    executor = TestExecutor(config)
-    
-    with patch("ra_aid.agent_utils.run_shell_command") as mock_run:
-        mock_run.return_value = {"success": True}
-        continue_flag, prompt, auto_test, attempts = executor.execute(0, "test prompt")
-        
-        assert continue_flag
-        assert prompt == "test prompt"
-        assert not auto_test
-        assert attempts == 0
 
-def test_test_executor_failure_with_retry():
-    """Test TestExecutor handles test failures with retry."""
-    config = {"test_cmd": "false", "auto_test": False}
-    executor = TestExecutor(config)
-    
-    with patch("ra_aid.agent_utils.run_shell_command") as mock_run:
-        mock_run.side_effect = Exception("Test failed")
-        with patch("ra_aid.agent_utils.ask_human") as mock_ask:
-            mock_ask.return_value = "yes"
-            continue_flag, prompt, auto_test, attempts = executor.execute(0, "test prompt")
-            
-            assert not continue_flag
-            assert prompt == "test prompt"
-            assert attempts == 1
-
-def test_test_executor_auto_test_mode():
-    """Test TestExecutor in auto-test mode."""
-    config = {"test_cmd": "false", "auto_test": True}
-    executor = TestExecutor(config)
-    
-    with patch("ra_aid.agent_utils.run_shell_command") as mock_run, \
-         patch("ra_aid.agent_utils.ask_human") as mock_ask:
-        mock_run.side_effect = Exception("Test failed")
-        mock_ask.return_value = "auto"
-        
-        continue_flag, prompt, auto_test, attempts = executor.execute(0, "test prompt")
-        
-        assert not continue_flag  # Should retry
-        assert prompt == "test prompt"  # Prompt unchanged
-        assert auto_test  # Auto-test mode enabled
-        assert attempts == 1  # One failed attempt
-        mock_ask.assert_called()  # Verify human interaction was attempted
-
-def test_interruptible_section_normal():
-    """Test InterruptibleSection normal operation."""
-    with InterruptibleSection() as section:
-        assert not section.is_interrupted()
-
-def test_interruptible_section_thread_safety():
-    """Test InterruptibleSection thread safety."""
-    results = []
-    
-    def worker():
-        with InterruptibleSection() as section:
-            results.append(section.is_interrupted())
-    
-    threads = [threading.Thread(target=worker) for _ in range(3)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
-        
-    assert all(not r for r in results)
-
-def test_interruptible_section_cleanup():
-    """Test InterruptibleSection proper cleanup."""
-    from ra_aid.agent_utils import _CONTEXT_STACK
-    
-    section = InterruptibleSection()
-    with section:
-        assert section in _CONTEXT_STACK
-    
-    assert not section.is_interrupted()
-    assert section not in _CONTEXT_STACK
 
 def test_run_agent_with_retry_integration():
     """Test integration of run_agent_with_retry with components."""

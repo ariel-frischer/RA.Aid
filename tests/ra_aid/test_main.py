@@ -90,7 +90,7 @@ def test_config_settings(mock_dependencies):
 
 def test_temperature_validation(mock_dependencies):
     """Test that temperature argument is correctly passed to initialize_llm."""
-    from ra_aid.__main__ import main, initialize_llm
+    from ra_aid.__main__ import main
     import sys
     from unittest.mock import patch
 

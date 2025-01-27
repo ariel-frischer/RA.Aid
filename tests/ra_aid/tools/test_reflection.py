@@ -1,4 +1,3 @@
-import pytest
 from ra_aid.tools.reflection import get_function_info
 
 # Sample functions for testing get_function_info

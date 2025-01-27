@@ -1,4 +1,3 @@
-import pytest
 from ra_aid.tool_configs import (
     get_read_only_tools,
     get_research_tools,

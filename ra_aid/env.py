@@ -3,9 +3,8 @@
 import os
 import sys
 from dataclasses import dataclass
-from typing import Tuple, List, Any
+from typing import List, Any
 
-from ra_aid import print_error
 from ra_aid.provider_strategy import ProviderFactory, ValidationResult
 
 @dataclass

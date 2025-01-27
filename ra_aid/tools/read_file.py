@@ -62,6 +62,6 @@ def read_file_tool(
 
         return {"content": truncated}
 
-    except Exception as e:
+    except Exception:
         elapsed = time.time() - start_time
         raise

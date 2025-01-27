@@ -1,5 +1,4 @@
 import pytest
-from pytest import mark
 from git import Repo
 from git.exc import InvalidGitRepositoryError
 from ra_aid.tools import fuzzy_find_project_files
