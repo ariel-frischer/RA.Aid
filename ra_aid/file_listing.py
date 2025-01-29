@@ -111,6 +111,9 @@ def get_file_listing(
         # Process the output
         files = [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
+        # Deduplicate and sort for consistency
+        files = list(dict.fromkeys(files))  # Remove duplicates while preserving order
+
         # Sort for consistency
         files.sort()
 
