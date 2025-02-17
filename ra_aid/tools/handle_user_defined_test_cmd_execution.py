@@ -85,7 +85,7 @@ class TestCommandExecutor:
             cmd: Test command to execute
             original_prompt: Original prompt text
         """
-        timeout = self.config.get("timeout", 30)
+        timeout = self.config.get("timeout", 60 * 5)
         try:
             logger.info(f"Executing test command: {cmd} with timeout {timeout}s")
             test_result = run_shell_command(cmd, timeout=timeout)
