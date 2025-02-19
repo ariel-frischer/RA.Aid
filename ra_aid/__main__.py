@@ -313,7 +313,7 @@ def build_status(
 
     if args.experimental_fallback_handler:
         fb_handler = FallbackHandler({}, [])
-        status.append("\nFallbackHandler Enabled: ")
+        status.append("\n🔧 FallbackHandler Enabled: ")
         msg = ", ".join(
             [fb_handler._format_model(m) for m in fb_handler.fallback_tool_models]
         )
