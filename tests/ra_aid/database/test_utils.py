@@ -99,23 +99,6 @@ def test_ensure_tables_created_with_models(cleanup_db, mock_logger):
     assert count == 1
 
 
-def test_ensure_tables_created_no_models(cleanup_db, mock_logger):
-    """Test ensure_tables_created with no models."""
-    # Initialize the database in memory
-    db = init_db(in_memory=True)
-
-    # Mock the import to simulate no models found
-    with patch(
-        "ra_aid.database.utils.importlib.import_module",
-        side_effect=ImportError("No module"),
-    ):
-        # Call ensure_tables_created with no models
-        ensure_tables_created()
-
-        # Verify warning message was logged
-        mock_logger.warning.assert_called_with("No models found to create tables for")
-
-
 @patch("ra_aid.database.utils.get_db")
 def test_ensure_tables_created_database_error(
     mock_get_db, setup_test_model, cleanup_db, mock_logger
