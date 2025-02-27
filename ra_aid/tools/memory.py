@@ -490,7 +490,7 @@ def is_binary_file(filepath):
             if "ASCII text" in file_type:
                 return False
 
-            return not mime.startswith("text/")
+            return True
         except Exception:
             return _is_binary_fallback(filepath)
     else:
