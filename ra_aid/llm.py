@@ -438,6 +438,7 @@ def create_llm_client(
         return ChatMistralAI(
             api_key=config.get("api_key"),
             model=model_name,
+            streaming=True,
             timeout=int(get_env_var(name="LLM_REQUEST_TIMEOUT", default=LLM_REQUEST_TIMEOUT)),
             max_retries=int(get_env_var(name="LLM_MAX_RETRIES", default=LLM_MAX_RETRIES)),
             **temp_kwargs,
