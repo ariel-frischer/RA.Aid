@@ -53,6 +53,7 @@ dependencies = [
     "prompt-toolkit",
     "mcp[cli]>=1.4.1",
     "langchain-mcp-adapters>=0.0.5",
+    "langchain-mistralai>=0.2.9",
 ]
 
 [project.optional-dependencies]

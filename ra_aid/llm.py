@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 from langchain_anthropic import ChatAnthropic
 from langchain_core.language_models import BaseChatModel
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_mistralai import ChatMistralAI
 from langchain_openai import ChatOpenAI
 from openai import OpenAI
 
@@ -66,6 +67,7 @@ known_temp_providers = {
     "gemini",
     "deepseek",
     "ollama",
+    "mistral",
 }
 
 # Constants for API request configuration
@@ -138,7 +140,8 @@ def create_openrouter_client(
             max_retries=int(get_env_var(name="LLM_MAX_RETRIES", default=LLM_MAX_RETRIES)),
             default_headers=default_headers,
         )
-
+    
+    # Always use ChatOpenAI for OpenRouter models, even if they contain "mistral" in the name
     return ChatOpenAI(
         api_key=api_key,
         base_url="https://openrouter.ai/api/v1",
@@ -226,6 +229,10 @@ def get_provider_config(provider: str, is_expert: bool = False) -> Dict[str, Any
             "api_key": None,  # No API key needed for Ollama
             "base_url": get_env_var("OLLAMA_BASE_URL", is_expert, "http://localhost:11434"),
         },
+        "mistral": {
+            "api_key": get_env_var("MISTRAL_API_KEY", is_expert),
+            "base_url": None,
+        },
     }
     config = configs.get(provider, {})
     if not config:
@@ -276,6 +283,10 @@ def create_llm_client(
     Returns:
         Configured language model client
     """
+    # Check if model_name contains "mistral" and use mistral provider if so
+    if "mistral" in model_name.lower() and provider != "openrouter":
+        provider = "mistral"
+    
     config = get_provider_config(provider, is_expert)
     if not config:
         raise ValueError(f"Unsupported provider: {provider}")
@@ -423,6 +434,14 @@ def create_llm_client(
             **temp_kwargs,
             **thinking_kwargs,
         )
+    elif provider == "mistral":
+        return ChatMistralAI(
+            api_key=config.get("api_key"),
+            model=model_name,
+            timeout=int(get_env_var(name="LLM_REQUEST_TIMEOUT", default=LLM_REQUEST_TIMEOUT)),
+            max_retries=int(get_env_var(name="LLM_MAX_RETRIES", default=LLM_MAX_RETRIES)),
+            **temp_kwargs,
+        )
     elif provider == "ollama":
         # Get num_ctx from config repository based on whether this is for expert model
         from ra_aid.database.repositories.config_repository import get_config_repository
@@ -470,6 +489,7 @@ def validate_provider_env(provider: str) -> bool:
         "openai-compatible": "OPENAI_API_KEY",
         "gemini": "GEMINI_API_KEY",
         "deepseek": "DEEPSEEK_API_KEY",
+        "mistral": "MISTRAL_API_KEY",
         "ollama": None,  # Ollama doesn't require any environment variables to be set
     }
     

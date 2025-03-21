@@ -304,6 +304,37 @@ class DeepSeekStrategy(ProviderStrategy):
         return ValidationResult(valid=len(missing) == 0, missing_vars=missing)
 
 
+class MistralStrategy(ProviderStrategy):
+    """Mistral provider validation strategy."""
+
+    def validate(self, args: Optional[Any] = None) -> ValidationResult:
+        """Validate Mistral environment variables."""
+        missing = []
+
+        if (
+            args
+            and hasattr(args, "expert_provider")
+            and args.expert_provider == "mistral"
+        ):
+            key = os.environ.get("EXPERT_MISTRAL_API_KEY")
+            if not key or key == "":
+                # Try to copy from base if not set
+                base_key = os.environ.get("MISTRAL_API_KEY")
+                if base_key:
+                    os.environ["EXPERT_MISTRAL_API_KEY"] = base_key
+                    key = base_key
+            if not key:
+                missing.append(
+                    "EXPERT_MISTRAL_API_KEY environment variable is not set"
+                )
+        else:
+            key = os.environ.get("MISTRAL_API_KEY")
+            if not key:
+                missing.append("MISTRAL_API_KEY environment variable is not set")
+
+        return ValidationResult(valid=len(missing) == 0, missing_vars=missing)
+
+
 class OllamaStrategy(ProviderStrategy):
     """Ollama provider validation strategy."""
 
@@ -336,6 +367,7 @@ class ProviderFactory:
             "gemini": GeminiStrategy(),
             "ollama": OllamaStrategy(),
             "deepseek": DeepSeekStrategy(),
+            "mistral": MistralStrategy(),
         }
         strategy = strategies.get(provider)
         return strategy

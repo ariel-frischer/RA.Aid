@@ -83,6 +83,9 @@ def should_use_react_agent(model: BaseChatModel) -> bool:
     model_name = get_model_name_from_chat_model(model)
     normalized_model_name = normalize_model_name(model_name)
 
+    if "mistral" in model_name or "codestral" in model_name:
+        return True
+
     try:
         supports_function_calling = litellm.supports_function_calling(
             model=normalized_model_name
