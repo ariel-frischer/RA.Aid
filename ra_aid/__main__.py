@@ -52,6 +52,7 @@ from ra_aid.database.repositories.session_repository import SessionRepositoryMan
 from ra_aid.database.repositories.related_files_repository import (
     RelatedFilesRepositoryManager,
 )
+
 from ra_aid.database.repositories.work_log_repository import WorkLogRepositoryManager
 from ra_aid.database.repositories.config_repository import (
     ConfigRepositoryManager,
@@ -238,6 +239,9 @@ def launch_server(host: str, port: int, args):
                 "web_research_enabled": web_research_enabled,
                 "show_thoughts": args.show_thoughts,
                 "show_cost": args.show_cost,
+                "track_cost": args.track_cost,  # Ensure track_cost is set
+                "max_tokens_limit": args.max_tokens,  # Add max tokens limit
+                "max_cost_limit": args.max_cost,  # Add max cost limit
                 "force_reasoning_assistance": args.reasoning_assistance,
                 "disable_reasoning_assistance": args.no_reasoning_assistance,
             }
@@ -497,6 +501,22 @@ Examples:
         type=str,
         help="File path of Python module containing custom tools (e.g. ./path/to_custom_tools.py)",
     )
+
+    # Add Execution Limits group
+    limits_group = parser.add_argument_group('Execution Limits')
+    limits_group.add_argument(
+        "--max-tokens",
+        type=int,
+        default=None,
+        help="Maximum total tokens allowed for the session. Execution stops if this limit is exceeded.",
+    )
+    limits_group.add_argument(
+        "--max-cost",
+        type=float,
+        default=None,
+        help="Maximum total cost (USD) allowed for the session. Execution stops if this limit is exceeded.",
+    )
+
     if args is None:
         args = sys.argv[1:]
     parsed_args = parser.parse_args(args)
@@ -569,6 +589,15 @@ Examples:
     # If show_cost is true, we must also enable track_cost
     if parsed_args.show_cost:
         parsed_args.track_cost = True
+
+    # If max_tokens or max_cost is set, we must also enable track_cost
+    if parsed_args.max_tokens is not None or parsed_args.max_cost is not None:
+        # Only enable if not explicitly disabled by --no-track-cost
+        if parsed_args.track_cost:
+            parsed_args.track_cost = True
+        else:
+            parser.error("--max-tokens or --max-cost requires cost tracking. Cannot use with --no-track-cost.")
+
 
     return parsed_args
 
@@ -840,7 +869,8 @@ def main():
                     )
 
                 # Update config repo with values from CLI arguments
-                config_repo.update(config)
+                config_repo.update(config) # Update with base config first
+                # Then set individual values, ensuring args override anything in base config
                 config_repo.set("provider", args.provider)
                 config_repo.set("model", args.model)
                 config_repo.set("num_ctx", args.num_ctx)
@@ -854,7 +884,9 @@ def main():
                 config_repo.set("web_research_enabled", web_research_enabled)
                 config_repo.set("show_thoughts", args.show_thoughts)
                 config_repo.set("show_cost", args.show_cost)
-                config_repo.set("track_cost", args.track_cost)
+                config_repo.set("track_cost", args.track_cost) # Ensure this is set correctly based on parsing logic
+                config_repo.set("max_tokens_limit", args.max_tokens) # Store max tokens limit
+                config_repo.set("max_cost_limit", args.max_cost) # Store max cost limit
                 config_repo.set("force_reasoning_assistance", args.reasoning_assistance)
                 config_repo.set(
                     "disable_reasoning_assistance", args.no_reasoning_assistance
@@ -971,7 +1003,7 @@ def main():
                         "limit_tokens": args.disable_limit_tokens,
                     }
 
-                    # Store config in repository
+                    # Store config in repository (again, ensures chat-specific config is there)
                     config_repo.update(config)
                     config_repo.set("provider", args.provider)
                     config_repo.set("model", args.model)
@@ -983,6 +1015,8 @@ def main():
                     config_repo.set("show_thoughts", args.show_thoughts)
                     config_repo.set("show_cost", args.show_cost)
                     config_repo.set("track_cost", args.track_cost)
+                    config_repo.set("max_tokens_limit", args.max_tokens)
+                    config_repo.set("max_cost_limit", args.max_cost)
                     config_repo.set(
                         "force_reasoning_assistance", args.reasoning_assistance
                     )
@@ -1093,7 +1127,7 @@ def main():
                     "test_cmd_timeout": args.test_cmd_timeout,
                 }
 
-                # Store config in repository
+                # Store config in repository (final update for non-chat mode)
                 config_repo.update(config)
 
                 # Store base provider/model configuration
@@ -1126,6 +1160,13 @@ def main():
                 config_repo.set(
                     "disable_reasoning_assistance", args.no_reasoning_assistance
                 )
+
+                # Store cost/token tracking and limits
+                config_repo.set("track_cost", args.track_cost)
+                config_repo.set("show_cost", args.show_cost)
+                config_repo.set("max_tokens_limit", args.max_tokens)
+                config_repo.set("max_cost_limit", args.max_cost)
+
 
                 # Set modification tools based on use_aider flag
                 set_modification_tools(args.use_aider)

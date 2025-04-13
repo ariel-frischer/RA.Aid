@@ -1,3 +1,4 @@
+
 import threading
 import time
 from langchain.chat_models.base import BaseChatModel
@@ -6,6 +7,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Dict, Optional, Union, Any, List
 from decimal import Decimal, getcontext
+import logging # Ensure logging is imported
 
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.outputs import LLMResult
@@ -22,7 +24,8 @@ from ra_aid.logging_config import get_logger
 # Added imports
 from ra_aid.config import DEFAULT_SHOW_COST
 from ra_aid.database.repositories.config_repository import get_config_repository
-from ra_aid.console.formatting import cpm
+from ra_aid.console.common import cpm # Import cpm for console messages
+from ra_aid.agent_context import mark_should_exit # Import for signaling exit
 
 logger = get_logger(__name__)
 
@@ -149,7 +152,6 @@ class DefaultCallbackHandler(BaseCallbackHandler, metaclass=Singleton):
                     return
         except Exception as e:
             logger.debug(f"Could not get model info from litellm: {e}")
-            # --- START MODIFICATION ---
             config_repo = get_config_repository()
             show_cost = config_repo.get("show_cost", DEFAULT_SHOW_COST)
             if show_cost:
@@ -157,7 +159,6 @@ class DefaultCallbackHandler(BaseCallbackHandler, metaclass=Singleton):
                     "Could not find model costs from litellm defaulting to MODEL_COSTS table or 0",
                     border_style="yellow",
                 )
-            # --- END MODIFICATION ---
 
         # Fallback logic remains the same
         model_cost = MODEL_COSTS.get(
@@ -290,7 +291,7 @@ class DefaultCallbackHandler(BaseCallbackHandler, metaclass=Singleton):
             self.successful_requests += 1
 
             # Update session totals
-            self.session_totals["cost"] += cost if "cost" in locals() else 0
+            self.session_totals["cost"] += cost if "cost" in locals() else Decimal("0.0") # Ensure cost is Decimal
             self.session_totals["tokens"] += total_tokens
             self.session_totals["input_tokens"] += prompt_tokens
             self.session_totals["output_tokens"] += completion_tokens
@@ -299,6 +300,35 @@ class DefaultCallbackHandler(BaseCallbackHandler, metaclass=Singleton):
             self._handle_callback_update(
                 total_tokens, prompt_tokens, completion_tokens, duration
             )
+
+            # --- START LIMIT CHECKING --- ADDED CODE BLOCK ---
+            try:
+                config_repo = get_config_repository()
+                max_tokens_limit = config_repo.get('max_tokens_limit')
+                max_cost_limit = config_repo.get('max_cost_limit')
+
+                # Check token limit first
+                if max_tokens_limit is not None and self.session_totals["tokens"] > max_tokens_limit:
+                    limit_message = f"Session {self.session_totals.get('session_id', 'N/A')} exceeded token limit: {self.session_totals['tokens']} > {max_tokens_limit}"
+                    logger.warning(limit_message)
+                    cpm.print(f"[bold yellow]Token limit ({max_tokens_limit}) reached. Stopping execution.[/]")
+                    mark_should_exit()
+                    return # Exit early if token limit is hit
+
+                # Check cost limit if token limit wasn't hit
+                if max_cost_limit is not None:
+                    # Ensure max_cost_limit is treated as string for Decimal conversion if it's float/int
+                    cost_limit_decimal = Decimal(str(max_cost_limit))
+                    if self.session_totals["cost"] > cost_limit_decimal:
+                        limit_message = f"Session {self.session_totals.get('session_id', 'N/A')} exceeded cost limit: {self.session_totals['cost']:.6f} > {cost_limit_decimal:.6f}"
+                        logger.warning(limit_message)
+                        cpm.print(f"[bold yellow]Cost limit (${max_cost_limit:.4f}) reached. Stopping execution.[/]")
+                        mark_should_exit()
+                        return # Exit if cost limit is hit
+            except Exception as e:
+                logger.error(f"Error during limit checking: {e}", exc_info=True)
+            # --- END LIMIT CHECKING --- ADDED CODE BLOCK ---
+
 
     def on_llm_end(self, response: LLMResult, **kwargs) -> None:
         try:
@@ -394,22 +424,24 @@ class DefaultCallbackHandler(BaseCallbackHandler, metaclass=Singleton):
                 if current_session:
                     self.session_totals["session_id"] = current_session.get_id()
 
-    def get_stats(self) -> Dict[str, Union[int, float]]:
+    def get_stats(self) -> Dict[str, Union[int, float, Decimal]]: # Updated return type hint
         try:
-            return {
+            # Ensure Decimals are returned where appropriate
+            stats = {
                 "total_tokens": self.total_tokens,
                 "prompt_tokens": self.prompt_tokens,
                 "completion_tokens": self.completion_tokens,
-                "total_cost": self.total_cost,
+                "total_cost": self.total_cost, # Return as Decimal
                 "successful_requests": self.successful_requests,
                 "model_name": self.model_name,
-                "session_totals": dict(self.session_totals),
+                "session_totals": {**self.session_totals, 'cost': self.session_totals['cost']}, # Return cost as Decimal
                 "cumulative_tokens": {
                     "total": self.cumulative_total_tokens,
                     "prompt": self.cumulative_prompt_tokens,
                     "completion": self.cumulative_completion_tokens,
                 },
             }
+            return stats
         except Exception as e:
             logger.error(f"Error getting stats: {e}", exc_info=True)
             return {}
