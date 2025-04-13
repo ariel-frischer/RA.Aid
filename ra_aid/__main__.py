@@ -52,6 +52,7 @@ from ra_aid.database.repositories.session_repository import SessionRepositoryMan
 from ra_aid.database.repositories.related_files_repository import (
     RelatedFilesRepositoryManager,
 )
+
 from ra_aid.database.repositories.work_log_repository import WorkLogRepositoryManager
 from ra_aid.database.repositories.config_repository import (
     ConfigRepositoryManager,
@@ -240,6 +241,8 @@ def launch_server(host: str, port: int, args):
                 "show_cost": args.show_cost,
                 "force_reasoning_assistance": args.reasoning_assistance,
                 "disable_reasoning_assistance": args.no_reasoning_assistance,
+                "max_tokens": args.max_tokens, # Add max_tokens
+                "max_cost": args.max_cost,     # Add max_cost
             }
         )
 
@@ -497,6 +500,21 @@ Examples:
         type=str,
         help="File path of Python module containing custom tools (e.g. ./path/to_custom_tools.py)",
     )
+    # Add max-tokens argument
+    parser.add_argument(
+        "--max-tokens",
+        type=int,
+        default=-1,
+        help="Maximum cumulative session tokens before stopping execution. Default: -1 (no limit)."
+    )
+    # Add max-cost argument
+    parser.add_argument(
+        "--max-cost",
+        type=float,
+        default=-1.0,
+        help="Maximum estimated session cost (USD) before stopping execution. Default: -1.0 (no limit)."
+    )
+
     if args is None:
         args = sys.argv[1:]
     parsed_args = parser.parse_args(args)
@@ -569,6 +587,12 @@ Examples:
     # If show_cost is true, we must also enable track_cost
     if parsed_args.show_cost:
         parsed_args.track_cost = True
+
+    # Validate max_tokens and max_cost are non-negative or -1/-1.0
+    if parsed_args.max_tokens < -1:
+        parser.error("--max-tokens must be -1 or a non-negative integer.")
+    if parsed_args.max_cost < -1.0:
+         parser.error("--max-cost must be -1.0 or a non-negative float.")
 
     return parsed_args
 
@@ -863,6 +887,9 @@ def main():
                 config_repo.set(
                     "custom_tools_enabled", True if args.custom_tools else False
                 )
+                # Store max tokens and max cost
+                config_repo.set("max_tokens", args.max_tokens)
+                config_repo.set("max_cost", args.max_cost)
 
                 # Validate custom tools function signatures
                 get_custom_tools()
@@ -989,6 +1016,10 @@ def main():
                     config_repo.set(
                         "disable_reasoning_assistance", args.no_reasoning_assistance
                     )
+                    # Add max tokens and max cost for chat mode
+                    config_repo.set("max_tokens", args.max_tokens)
+                    config_repo.set("max_cost", args.max_cost)
+
 
                     # Set modification tools based on use_aider flag
                     set_modification_tools(args.use_aider)
@@ -1126,6 +1157,9 @@ def main():
                 config_repo.set(
                     "disable_reasoning_assistance", args.no_reasoning_assistance
                 )
+                # Store max tokens and max cost for non-chat mode
+                config_repo.set("max_tokens", args.max_tokens)
+                config_repo.set("max_cost", args.max_cost)
 
                 # Set modification tools based on use_aider flag
                 set_modification_tools(args.use_aider)
