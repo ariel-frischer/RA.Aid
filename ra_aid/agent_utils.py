@@ -6,10 +6,13 @@ import threading
 import time
 from typing import Any, Dict, List, Literal, Optional
 import uuid
+import logging
+from decimal import Decimal
 
 from langgraph.graph.graph import CompiledGraph
 from ra_aid.callbacks.default_callback_handler import (
     _initialize_callback_handler_internal,
+    DefaultCallbackHandler, # Added import
 )
 from ra_aid.model_detection import (
     should_use_react_agent,
@@ -53,7 +56,7 @@ from ra_aid.exceptions import (
     ToolExecutionError,
 )
 from ra_aid.fallback_handler import FallbackHandler
-from ra_aid.logging_config import get_logger
+# from ra_aid.logging_config import get_logger # Logger already initialized below
 from ra_aid.models_params import (
     DEFAULT_TOKEN_LIMIT,
 )
@@ -72,7 +75,7 @@ from ra_aid.anthropic_token_limiter import (
 )
 
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__) # Already initialized here
 
 
 def build_agent_kwargs(
@@ -494,16 +497,13 @@ def _get_agent_state(agent: RAgents, state_config: Dict[str, Any]):
 
 def _run_agent_stream(agent: RAgents, msg_list: list[BaseMessage]):
     """
-    Streams agent output while handling completion and interruption.
+    Streams agent output while handling completion, interruption, and limits.
 
     For each chunk, it logs the output, calls check_interrupt(), prints agent output,
-    and then checks if is_completed() or should_exit() are true. If so, it resets completion
-    flags and returns. After finishing a stream iteration (i.e. the for-loop over chunks),
-    the function retrieves the agent's state. If the state indicates further steps (i.e. state.next is non-empty),
-    it resumes execution via agent.invoke(None, config); otherwise, it exits the loop.
-
-    This function adheres to the latest LangGraph best practices (as of March 2025) for handling
-    human-in-the-loop interruptions using interrupt_after=["tools"].
+    checks token/cost limits, and then checks if is_completed() or should_exit() are true.
+    If limits are exceeded or completion/exit flags are set, it takes appropriate action.
+    After finishing a stream iteration, it retrieves the agent's state.
+    If the state indicates further steps, it resumes execution; otherwise, it exits the loop.
     """
     _cb, stream_config = initialize_callback_handler(agent)
     stream_config = _prepare_state_config(stream_config)
@@ -516,9 +516,52 @@ def _run_agent_stream(agent: RAgents, msg_list: list[BaseMessage]):
             agent_type = get_agent_type(agent)
             print_agent_output(chunk, agent_type)
 
+            # --- Start Limit Checking Logic ---
+            try:
+                config_repo = get_config_repository()
+                # Use get() with defaults to handle cases where they might not be set
+                max_tokens_config = config_repo.get('max_tokens', -1)
+                max_cost_config = config_repo.get('max_cost', -1.0)
+
+                # Ensure max_tokens is an int or None
+                max_tokens = int(max_tokens_config) if max_tokens_config is not None else -1
+
+                # Ensure max_cost is a Decimal or None
+                if max_cost_config is None or float(max_cost_config) < 0:
+                     max_cost = Decimal('-1.0')
+                else:
+                     max_cost = Decimal(str(max_cost_config)) # Convert via string for precision
+
+                handler = DefaultCallbackHandler() # Get singleton instance
+                session_tokens = handler.session_totals['tokens']
+                session_cost = handler.session_totals['cost']
+
+                # Check Token Limit
+                # Check if max_tokens is set (not None and >= 0)
+                if max_tokens >= 0 and session_tokens >= max_tokens:
+                    message = f"Execution stopped: Maximum token limit of {max_tokens} reached (Session total: {session_tokens})."
+                    logger.error(message)
+                    cpm(f"[bold red]🛑 {message}[/bold red]")
+                    sys.exit(1) # Exit with non-zero code
+
+                # Check Cost Limit
+                # Check if max_cost is set (not None and >= 0.0)
+                if max_cost >= Decimal('0.0') and session_cost >= max_cost:
+                    # Format cost for display, ensuring consistent decimal places
+                    formatted_max_cost = f"{max_cost:.4f}".rstrip('0').rstrip('.') if '.' in f"{max_cost:.4f}" else f"{max_cost}"
+                    formatted_session_cost = f"{session_cost:.4f}".rstrip('0').rstrip('.') if '.' in f"{session_cost:.4f}" else f"{session_cost}"
+                    message = f"Execution stopped: Maximum cost limit of ${formatted_max_cost} reached (Session total: ${formatted_session_cost})."
+                    logger.error(message)
+                    cpm(f"[bold red]🛑 {message}[/bold red]")
+                    sys.exit(1) # Exit with non-zero code
+            except Exception as e:
+                # Log error during limit check but don't crash the agent
+                logger.error(f"Error during token/cost limit check: {e}", exc_info=True)
+            # --- End Limit Checking Logic ---
+
             if is_completed() or should_exit():
                 reset_completion_flags()
-                return True
+                return True # Indicate successful completion or exit
 
         logger.debug("Stream iteration ended; checking agent state for continuation.")
 
@@ -526,13 +569,14 @@ def _run_agent_stream(agent: RAgents, msg_list: list[BaseMessage]):
 
         if state.next:
             logger.debug(f"Continuing execution with state.next: {state.next}")
+            # Invoke without input as state carries the context
             agent.invoke(None, stream_config)
             continue
         else:
             logger.debug("No continuation indicated in state; exiting stream loop.")
             break
 
-    return True
+    return True # Indicate successful completion of the stream loop
 
 
 def run_agent_with_retry(
@@ -586,11 +630,22 @@ def run_agent_with_retry(
                     return f"Agent has crashed: {crash_message}"
 
                 try:
-                    _run_agent_stream(agent, msg_list)
+                    stream_completed = _run_agent_stream(agent, msg_list)
+                    # Check if the stream function exited due to completion/stop signal
+                    if stream_completed and (is_completed() or should_exit()):
+                         logger.debug("Agent stream completed or stopped.")
+                         # If stopped by user or task completion, may not need testing
+                         if is_completed():
+                             return "Agent run completed successfully"
+                         else: # stopped by should_exit() or user interrupt
+                             return "Agent run stopped"
+
+                    # If stream finished normally (not stopped), proceed with testing logic
                     if fallback_handler and hasattr(
                         fallback_handler, "reset_fallback_handler"
                     ):
                         fallback_handler.reset_fallback_handler()
+
                     should_break, prompt, auto_test, test_attempts = (
                         _execute_test_command_wrapper(
                             original_prompt, run_config, test_attempts, auto_test
@@ -599,9 +654,10 @@ def run_agent_with_retry(
                     if should_break:
                         break
                     if prompt != original_prompt:
+                        msg_list = [HumanMessage(content=prompt)] # Update message list for retry
                         continue
 
-                    logger.debug("Agent run completed successfully")
+                    logger.debug("Agent run completed successfully after testing logic")
                     return "Agent run completed successfully"
                 except ToolExecutionError as e:
                     # Check if this is a BadRequestError (HTTP 400) which is unretryable
