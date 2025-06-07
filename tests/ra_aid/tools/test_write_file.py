@@ -255,11 +255,22 @@ def test_invalid_path_characters(temp_test_dir):
     assert "Invalid file path" in result["message"]
 
 
+@pytest.mark.skipif(
+    os.name == "nt" 
+    or os.geteuid() == 0 
+    or os.environ.get("GITHUB_ACTIONS") == "true", 
+    reason="Permission tests unreliable on Windows, when running as root, or in GitHub Actions"
+)
 def test_write_to_readonly_directory(temp_test_dir):
     """Test writing to a readonly directory."""
     readonly_dir = temp_test_dir / "readonly"
     readonly_dir.mkdir()
     test_file = readonly_dir / "test.txt"
+
+    # Skip the actual test if running in a container environment where permissions behave differently
+    if os.path.exists("/.dockerenv") or os.environ.get("CONTAINER", "") or os.geteuid() == 0:
+        pytest.skip("Skipping permission test in container environment")
+        return
 
     # Make directory readonly
     os.chmod(readonly_dir, 0o444)

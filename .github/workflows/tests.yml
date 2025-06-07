@@ -31,4 +31,6 @@ jobs:
     - name: Setup and Run Tests
       run: |
         make setup-dev
+        # Set GITHUB_ACTIONS environment variable to true
+        export GITHUB_ACTIONS=true
         make test

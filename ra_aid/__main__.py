@@ -244,6 +244,11 @@ def launch_server(host: str, port: int, args):
                 "force_reasoning_assistance": args.reasoning_assistance,
                 "disable_reasoning_assistance": args.no_reasoning_assistance,
                 "cowboy_mode": args.cowboy_mode,
+                # Context condensation settings
+                "enable_condensation": args.enable_condensation,
+                "condensation_quality": args.condensation_quality,
+                "condenser_model": args.condenser_model,
+                "condenser_provider": args.condenser_provider,
             }
         )
 
@@ -460,6 +465,40 @@ Examples:
         "--project-state-dir",
         help="Directory to store project state (database and logs). By default, a .ra-aid directory is created in the current working directory.",
     )
+    
+    # Context condensation arguments
+    condensation_group = parser.add_argument_group("Context Condensation Options")
+    condensation_toggle = condensation_group.add_mutually_exclusive_group()
+    condensation_toggle.add_argument(
+        "--enable-condensation",
+        action="store_true",
+        dest="enable_condensation",
+        help="Enable context condensation when token limits are reached (default)",
+    )
+    condensation_toggle.add_argument(
+        "--disable-condensation",
+        action="store_false",
+        dest="enable_condensation",
+        help="Disable context condensation when token limits are reached",
+    )
+    condensation_group.add_argument(
+        "--condensation-quality",
+        type=str,
+        choices=["fast", "balanced", "advanced"],
+        default="balanced",
+        help="Quality level for context condensation (fast: GPT-3.5 Turbo, balanced: GPT-4o-mini, advanced: DeepSeek R1)",
+    )
+    condensation_group.add_argument(
+        "--condenser-model",
+        type=str,
+        help="Custom model to use for context condensation (overrides quality selection)",
+    )
+    condensation_group.add_argument(
+        "--condenser-provider",
+        type=str,
+        help="Custom provider for the condenser model",
+    )
+    
     parser.add_argument(
         "--show-thoughts",
         action="store_true",
@@ -1018,6 +1057,12 @@ def main():
                         "disable_reasoning_assistance", args.no_reasoning_assistance
                     )
                     config_repo.set("cowboy_mode", args.cowboy_mode) # Chat mode also needs cowboy mode
+                    
+                    # Context condensation settings
+                    config_repo.set("enable_condensation", args.enable_condensation)
+                    config_repo.set("condensation_quality", args.condensation_quality)
+                    config_repo.set("condenser_model", args.condenser_model)
+                    config_repo.set("condenser_provider", args.condenser_provider)
 
                     # Set modification tools based on use_aider flag
                     set_modification_tools(args.use_aider)
@@ -1143,6 +1188,11 @@ def main():
                     "max_test_cmd_retries": args.max_test_cmd_retries,
                     "experimental_fallback_handler": args.experimental_fallback_handler,
                     "test_cmd_timeout": args.test_cmd_timeout,
+                    # Context condensation settings
+                    "enable_condensation": args.enable_condensation,
+                    "condensation_quality": args.condensation_quality,
+                    "condenser_model": args.condenser_model,
+                    "condenser_provider": args.condenser_provider,
                 }
 
                 # Store config in repository
