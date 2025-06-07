@@ -1,11 +1,16 @@
 """Utilities for handling token limits with Anthropic models."""
 
 from functools import partial
+import asyncio
 from typing import Any, Dict, List, Optional, Sequence
 
 from langchain.chat_models.base import BaseChatModel
 from typing import Tuple
-from ra_aid.config import DEFAULT_MODEL
+from ra_aid.config import (
+    DEFAULT_MODEL,
+    DEFAULT_ENABLE_CONDENSATION,
+    DEFAULT_CONDENSATION_QUALITY,
+)
 from ra_aid.model_detection import is_claude_37, get_model_name_from_chat_model
 
 from langchain_core.messages import (
@@ -24,6 +29,10 @@ from ra_aid.agent_backends.ciayn_agent import CiaynAgent
 from ra_aid.database.repositories.config_repository import get_config_repository
 from ra_aid.logging_config import get_logger
 from ra_aid.models_params import DEFAULT_TOKEN_LIMIT, models_params
+from ra_aid.context_condensation import (
+    ContextCondenser,
+    get_condenser_model_for_quality,
+)
 
 logger = get_logger(__name__)
 
@@ -133,6 +142,93 @@ def state_modifier(
     return result
 
 
+async def condensed_state_modifier(
+    state: AgentState, 
+    model: BaseChatModel, 
+    max_input_tokens: int = DEFAULT_TOKEN_LIMIT,
+    condenser_model: Optional[str] = None,
+    condenser_provider: Optional[str] = None,
+    enable_condensation: bool = DEFAULT_ENABLE_CONDENSATION,
+    condensation_quality: str = DEFAULT_CONDENSATION_QUALITY,
+) -> list[BaseMessage]:
+    """Given the agent state and max_tokens, return a condensed list of messages.
+    
+    This uses context condensation to summarize older messages rather than dropping them.
+    
+    Args:
+        state: The current agent state containing messages
+        model: The language model to use for token counting
+        max_input_tokens: Maximum number of tokens to allow
+        condenser_model: Model to use for condensing context
+        condenser_provider: Provider for the condenser model
+        enable_condensation: Whether to enable context condensation
+        condensation_quality: Quality level for condensation ("fast", "balanced", or "advanced")
+        
+    Returns:
+        list[BaseMessage]: Condensed list of messages that fits within token limit
+    """
+    messages = state["messages"]
+    if not messages:
+        return []
+        
+    model_name = get_model_name_from_chat_model(model)
+    wrapped_token_counter = create_token_counter_wrapper(model_name)
+    
+    # Check if we're already under the token limit
+    current_tokens = wrapped_token_counter(messages)
+    if current_tokens <= max_input_tokens:
+        return messages
+    
+    # If condensation is disabled, fall back to traditional trimming
+    if not enable_condensation:
+        return anthropic_trim_messages(
+            messages,
+            token_counter=wrapped_token_counter,
+            max_tokens=max_input_tokens,
+            strategy="last",
+            allow_partial=False,
+            include_system=True,
+            num_messages_to_keep=2,
+        )
+    
+    # Get appropriate condenser model based on quality
+    if not condenser_model:
+        condenser_model, condenser_provider = get_condenser_model_for_quality(
+            quality=condensation_quality,
+            custom_model=condenser_model,
+            custom_provider=condenser_provider,
+        )
+    
+    # Use context condenser
+    condenser = ContextCondenser(
+        condenser_model=condenser_model,
+        condenser_provider=condenser_provider,
+    )
+    
+    try:
+        # Condense messages with a timeout
+        condensed_messages = await asyncio.wait_for(
+            condenser.condense_messages(
+                messages,
+                token_counter=wrapped_token_counter,
+                max_tokens=max_input_tokens,
+                num_messages_to_keep=2,
+                preserve_system_messages=True,
+            ),
+            timeout=10.0  # 10 second timeout
+        )
+        
+        if len(condensed_messages) < len(messages):
+            logger.debug(
+                f"Context Condenser: {len(messages)} messages → {len(condensed_messages)} messages"
+            )
+            
+        return condensed_messages
+    except (asyncio.TimeoutError, Exception) as e:
+        logger.warning(f"Context condensation failed: {e}, falling back to traditional trimming")
+        return state_modifier(state, model, max_input_tokens)
+
+
 def base_state_modifier(
     state: AgentState, max_input_tokens: int = DEFAULT_TOKEN_LIMIT
 ) -> list[BaseMessage]:
@@ -167,6 +263,91 @@ def base_state_modifier(
     result = [first_message] + trimmed_remaining
 
     return result
+
+
+async def condensed_base_state_modifier(
+    state: AgentState, 
+    max_input_tokens: int = DEFAULT_TOKEN_LIMIT,
+    condenser_model: Optional[str] = None,
+    condenser_provider: Optional[str] = None,
+    enable_condensation: bool = DEFAULT_ENABLE_CONDENSATION,
+    condensation_quality: str = DEFAULT_CONDENSATION_QUALITY,
+) -> list[BaseMessage]:
+    """Given the agent state and max_tokens, return a condensed list of messages.
+    
+    Args:
+        state: The current agent state containing messages
+        max_input_tokens: Maximum number of tokens to allow
+        condenser_model: Model to use for condensing context
+        condenser_provider: Provider for the condenser model
+        enable_condensation: Whether to enable context condensation
+        condensation_quality: Quality level for condensation ("fast", "balanced", or "advanced")
+        
+    Returns:
+        list[BaseMessage]: Condensed list of messages that fits within token limit
+    """
+    messages = state["messages"]
+    if not messages:
+        return []
+    
+    # If condensation is disabled, fall back to traditional trimming
+    if not enable_condensation:
+        return base_state_modifier(state, max_input_tokens)
+    
+    # Check if we're already under the token limit
+    current_tokens = estimate_messages_tokens(messages)
+    if current_tokens <= max_input_tokens:
+        return messages
+    
+    # Get appropriate condenser model based on quality
+    if not condenser_model:
+        condenser_model, condenser_provider = get_condenser_model_for_quality(
+            quality=condensation_quality,
+            custom_model=condenser_model,
+            custom_provider=condenser_provider,
+        )
+    
+    # Create token counter function
+    def token_counter(msgs):
+        return estimate_messages_tokens(msgs)
+    
+    # Use context condenser
+    condenser = ContextCondenser(
+        condenser_model=condenser_model,
+        condenser_provider=condenser_provider,
+    )
+    
+    try:
+        # Always keep the first message
+        first_message = messages[0]
+        remaining_messages = messages[1:]
+        
+        # Condense remaining messages
+        first_tokens = token_counter([first_message])
+        
+        # Condense remaining messages with a timeout
+        condensed_remaining = await asyncio.wait_for(
+            condenser.condense_messages(
+                remaining_messages,
+                token_counter=token_counter,
+                max_tokens=max_input_tokens - first_tokens,
+                num_messages_to_keep=2,
+                preserve_system_messages=True,
+            ),
+            timeout=10.0  # 10 second timeout
+        )
+        
+        result = [first_message] + condensed_remaining
+        
+        if len(result) < len(messages):
+            logger.debug(
+                f"Context Condenser: {len(messages)} messages → {len(result)} messages"
+            )
+            
+        return result
+    except (asyncio.TimeoutError, Exception) as e:
+        logger.warning(f"Context condensation failed: {e}, falling back to traditional trimming")
+        return base_state_modifier(state, max_input_tokens)
 
 
 def get_provider_and_model_for_agent_type(
@@ -231,6 +412,52 @@ def adjust_claude_37_token_limit(
             return effective_max_input_tokens
 
     return max_input_tokens
+
+
+def get_condenser_config(
+    config: Dict[str, Any] = None,
+    use_repository: bool = True,
+) -> Tuple[bool, Optional[str], Optional[str], str]:
+    """Get the condenser configuration from the config dictionary or repository.
+    
+    Args:
+        config: Configuration dictionary (used if use_repository is False)
+        use_repository: Whether to use direct repository calls instead of the config dict
+        
+    Returns:
+        Tuple[bool, Optional[str], Optional[str], str]: (enable_condensation, condenser_model, condenser_provider, condensation_quality)
+    """
+    try:
+        if use_repository:
+            try:
+                # Test if repository is available by accessing it
+                repo = get_config_repository()
+                repository_available = True
+            except RuntimeError:
+                # In tests, this may fail because the repository isn't set up
+                repository_available = False
+                
+            if repository_available:
+                enable_condensation = repo.get("enable_condensation", DEFAULT_ENABLE_CONDENSATION)
+                condenser_model = repo.get("condenser_model", None)
+                condenser_provider = repo.get("condenser_provider", None)
+                condensation_quality = repo.get("condensation_quality", DEFAULT_CONDENSATION_QUALITY)
+                return enable_condensation, condenser_model, condenser_provider, condensation_quality
+        
+        # Fall back to config dict if repository not available or not requested
+        if config:
+            enable_condensation = config.get("enable_condensation", DEFAULT_ENABLE_CONDENSATION)
+            condenser_model = config.get("condenser_model", None)
+            condenser_provider = config.get("condenser_provider", None)
+            condensation_quality = config.get("condensation_quality", DEFAULT_CONDENSATION_QUALITY)
+            return enable_condensation, condenser_model, condenser_provider, condensation_quality
+            
+        # Default values if neither repository nor config dict is available
+        return DEFAULT_ENABLE_CONDENSATION, None, None, DEFAULT_CONDENSATION_QUALITY
+        
+    except Exception as e:
+        logger.warning(f"Failed to get condenser config: {e}")
+        return DEFAULT_ENABLE_CONDENSATION, None, None, DEFAULT_CONDENSATION_QUALITY
 
 
 def get_model_token_limit(

@@ -2,17 +2,22 @@ import re
 import ast
 import string
 import random
+import asyncio
 from dataclasses import dataclass
 from typing import Any, Dict, Generator, List, Optional, Union
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool
 
 from ra_aid.callbacks.default_callback_handler import (
     initialize_callback_handler,
 )
-from ra_aid.config import DEFAULT_MAX_TOOL_FAILURES
+from ra_aid.config import (
+    DEFAULT_MAX_TOOL_FAILURES,
+    DEFAULT_ENABLE_CONDENSATION,
+    DEFAULT_CONDENSATION_QUALITY,
+)
 from ra_aid.exceptions import ToolExecutionError
 from ra_aid.fallback_handler import FallbackHandler
 from ra_aid.logging_config import get_logger
@@ -865,6 +870,68 @@ class CiaynAgent:
             },
         }
 
+    async def _condense_chat_history(
+        self, messages: List[BaseMessage], max_tokens: int
+    ) -> List[BaseMessage]:
+        """Condense chat history using context condensation.
+        
+        Args:
+            messages: List of messages to condense
+            max_tokens: Maximum token limit
+            
+        Returns:
+            List[BaseMessage]: Condensed messages
+        """
+        from ra_aid.context_condensation import (
+            ContextCondenser,
+            get_condenser_model_for_quality,
+        )
+        from ra_aid.anthropic_token_limiter import get_condenser_config
+        
+        # Get condensation config
+        enable_condensation, condenser_model, condenser_provider, condensation_quality = get_condenser_config()
+        
+        # If condensation is disabled, return original messages
+        if not enable_condensation:
+            return messages
+            
+        # Get appropriate condenser model based on quality
+        model, provider = get_condenser_model_for_quality(
+            quality=condensation_quality,
+            custom_model=condenser_model,
+            custom_provider=condenser_provider,
+        )
+        
+        # Create token counter function
+        def token_counter(msgs):
+            return sum(self._estimate_tokens(msg) for msg in msgs)
+        
+        # Use context condenser
+        condenser = ContextCondenser(
+            condenser_model=model,
+            condenser_provider=provider,
+        )
+        
+        try:
+            # Condense messages
+            condensed_messages = await condenser.condense_messages(
+                messages,
+                token_counter=token_counter,
+                max_tokens=max_tokens,
+                num_messages_to_keep=2,
+                preserve_system_messages=True,
+            )
+            
+            if len(condensed_messages) < len(messages):
+                logger.debug(
+                    f"Context Condenser: {len(messages)} messages → {len(condensed_messages)} messages"
+                )
+                
+            return condensed_messages
+        except Exception as e:
+            logger.warning(f"Context condensation failed: {e}, falling back to traditional trimming")
+            return messages
+    
     def _trim_chat_history(
         self, initial_messages: List[Any], chat_history: List[Any]
     ) -> List[Any]:
@@ -872,6 +939,9 @@ class CiaynAgent:
 
         Applies both message count and token limits (if configured) to chat_history,
         while preserving all initial_messages. Returns concatenated result.
+        
+        If context condensation is enabled, it will be used to summarize older messages
+        rather than dropping them completely.
 
         Args:
             initial_messages: List of initial messages to preserve
@@ -880,6 +950,8 @@ class CiaynAgent:
         Returns:
             List[Any]: Concatenated initial_messages + trimmed chat_history
         """
+        import asyncio
+        
         # First apply message count limit
         if len(chat_history) > self.max_history_messages:
             chat_history = chat_history[-self.max_history_messages :]
@@ -887,11 +959,56 @@ class CiaynAgent:
         # Skip token limiting if max_tokens is None
         if self.max_tokens is None:
             return initial_messages + chat_history
+            
+        # Get condensation config
+        try:
+            from ra_aid.anthropic_token_limiter import get_condenser_config
+            enable_condensation, _, _, _ = get_condenser_config()
+        except Exception:
+            enable_condensation = False
 
         # Calculate initial messages token count
         initial_tokens = sum(self._estimate_tokens(msg) for msg in initial_messages)
-
-        # Remove messages from start of chat_history until under token limit
+        
+        # Calculate available tokens for chat history
+        available_tokens = self.max_tokens - initial_tokens
+        
+        # If context condensation is enabled, try to condense chat history
+        if enable_condensation and available_tokens > 0:
+            try:
+                # Run condensation in a new event loop if needed
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # Create a new event loop for the condensation
+                        new_loop = asyncio.new_event_loop()
+                        condensed_chat_history = new_loop.run_until_complete(
+                            self._condense_chat_history(chat_history, available_tokens)
+                        )
+                        new_loop.close()
+                    else:
+                        # Use the existing event loop
+                        condensed_chat_history = loop.run_until_complete(
+                            self._condense_chat_history(chat_history, available_tokens)
+                        )
+                except RuntimeError:
+                    # If we can't get the event loop, create a new one
+                    new_loop = asyncio.new_event_loop()
+                    condensed_chat_history = new_loop.run_until_complete(
+                        self._condense_chat_history(chat_history, available_tokens)
+                    )
+                    new_loop.close()
+                
+                # Check if condensed history fits within token limit
+                condensed_tokens = sum(self._estimate_tokens(msg) for msg in condensed_chat_history)
+                if condensed_tokens <= available_tokens:
+                    return initial_messages + condensed_chat_history
+                    
+            except Exception as e:
+                logger.warning(f"Failed to condense chat history: {e}")
+                # Fall back to traditional trimming
+        
+        # Traditional trimming: Remove messages from start of chat_history until under token limit
         while chat_history:
             total_tokens = initial_tokens + sum(
                 self._estimate_tokens(msg) for msg in chat_history
