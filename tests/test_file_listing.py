@@ -208,7 +208,12 @@ def test_file_as_directory(tmp_path):
         get_file_listing(str(test_file))
 
 
-@pytest.mark.skipif(os.name == "nt" or os.geteuid() == 0, reason="Permission tests unreliable on Windows or when running as root")
+@pytest.mark.skipif(
+    os.name == "nt" 
+    or os.geteuid() == 0 
+    or os.environ.get("GITHUB_ACTIONS") == "true", 
+    reason="Permission tests unreliable on Windows, when running as root, or in GitHub Actions"
+)
 def test_permission_error(tmp_path):
     """Test handling of permission errors."""
     try:

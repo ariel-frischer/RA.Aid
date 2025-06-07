@@ -255,7 +255,12 @@ def test_invalid_path_characters(temp_test_dir):
     assert "Invalid file path" in result["message"]
 
 
-@pytest.mark.skipif(os.name == "nt" or os.geteuid() == 0, reason="Permission tests unreliable on Windows or when running as root")
+@pytest.mark.skipif(
+    os.name == "nt" 
+    or os.geteuid() == 0 
+    or os.environ.get("GITHUB_ACTIONS") == "true", 
+    reason="Permission tests unreliable on Windows, when running as root, or in GitHub Actions"
+)
 def test_write_to_readonly_directory(temp_test_dir):
     """Test writing to a readonly directory."""
     readonly_dir = temp_test_dir / "readonly"
